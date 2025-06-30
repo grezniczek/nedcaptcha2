@@ -12,7 +12,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	private $cipher = "AES-256-CBC";
 	const CAPTCHA_GET_NAME = "__nc2";
 
-	const SESSION_KEY = "__nedcaptcha2__";
+	const CLIENT_KEY = "__nedcaptcha2__ck__";
+	const STORE_KEY = "__nedcaptcha2__";
 
 	const AT_SETUP = "@NEDCAPTCHA";
 	const AT_INSTRUCTIONS = "@NEDCAPTCHA-INSTRUCTIONS";
@@ -20,7 +21,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	private $nedcaptcha_fields = [];
 	private $scripts_delayed = [];
-	private $scripts_immediate = [];
+	private $scripts_regular = [];
+	private $scripts_top = [];
 	private $styles = [];
 	private $errors = [];
 
@@ -32,12 +34,32 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$page = defined("PAGE") ? PAGE : "";
 		if ($page != "surveys/index.php") return;
 		$psh = $this->framework->getPublicSurveyHash($project_id);
-		if ($_GET["s"] !== $psh) return;
+		$sh = $_GET["s"];
+		if ($psh != $sh) return;
+
+		$post = $_POST;
+
+		$client_key = isset($_POST[self::CLIENT_KEY]) ? $_POST[self::CLIENT_KEY] : \Crypto::getGuid();
+		$this->scripts_delayed[] = "$('input[name=\"redcap_csrf_token\"]').after($('<input type=\"hidden\" name=\"".self::CLIENT_KEY."\" value=\"$client_key\">'));";
+
+		// Persistence
+		$store_key = self::STORE_KEY.$psh;
+		$result = $this->queryLogs("SELECT timestamp, ck, passed WHERE message = ?", $store_key);
+		$stored = $result->fetch_assoc();
+		if (!$stored || (($stored["ck"] ?? "") !== $client_key)) {
+			$this->framework->removeLogs("message = ?", $store_key);
+			$this->framework->log($store_key, [
+				"ck" => $client_key,
+				"passed" => false,
+			]);
+		}
+
+
 
 		/** @var \Project */
 		$Proj = $GLOBALS["Proj"];
 		// Obtain survey info
-		$context = \Survey::getSurveyContextFromSurveyHash($psh);
+		$context = \Survey::getSurveyContextFromSurveyHash($sh);
 		$instrument = $context["form_name"];
 		$survey_id = $context["survey_id"];
 		$context["instrument"] = $instrument;
@@ -46,7 +68,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		list($page_fields, $total_pages) = \Survey::getPageFields($instrument, true);
 
 		require_once "classes/ActionTagHelper.php";
-		$tagged = ActionTagHelper::getActionTags([self::AT_SETUP, self::AT_INSTRUCTIONS, self::AT_FAILMESSAGE], $page_fields[1], null, $context) ?? [];
+		$tagged = ActionTagHelper::getActionTags([self::AT_SETUP, self::AT_INSTRUCTIONS, self::AT_FAILMESSAGE], $page_fields[1], null, $context) ?? [];		$this->nedcaptcha_fields = array_filter([
+			array_keys($tagged[self::AT_SETUP] ?? [""])[0], 
+			array_keys($tagged[self::AT_INSTRUCTIONS] ?? [""])[0], 
+			array_keys($tagged[self::AT_FAILMESSAGE] ?? [""])[0]
+		], function($v) { return $v !== ""; });
+
 		if (!isset($tagged[self::AT_SETUP])) {
 			return; // We are done
 		}
@@ -54,25 +81,47 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$params = $this->validate_params($tagged[self::AT_SETUP][$captcha_field]["params"]);
 		if ($params === false) {
 			$this->errors[] = "Error parsing NEDCaptcha2 parameters!";
+			foreach ($this->nedcaptcha_fields as $field) {
+				unset($Proj->metadata[$field]);
+				unset($Proj->forms[$instrument]['fields'][$field]);
+			}
 			return;
 		}
 
 		$jsmo = $this->framework->getJavascriptModuleObjectName();
 
-
+		$highlight_input = "$('input[name=\"{$captcha_field}\"]').css({ 'outline': '2px solid red'}).after($('<i class=\"fa-solid fa-exclamation-circle fa-lg ms-2 text-danger\"></i>')).get(0).focus();";
 	
 		// Substitute survey instructions?
 		if (isset($tagged[self::AT_INSTRUCTIONS])) {
 			$instructions_field = array_keys($tagged[self::AT_INSTRUCTIONS])[0];
+			$this->styles[] = "form#form [sq_id=\"{$captcha_field}\"] input[name=\"{$captcha_field}\"] { max-width: 150px; }";
 			$this->styles[] = "[sq_id=\"{$instructions_field}\"] { display: none !important; }";
 			$this->styles[] = "#surveyinstructions { display: none !important; }";
+			$this->styles[] = "#surveyinstructions-reveal { display: none !important; }";
 			$this->styles[] = "#nedcaptcha2-instructions { padding: 0 10px 15px; }";
-			$this->scripts_delayed[] = 
+			$this->scripts_regular[] = 
 				<<<END
 					$('button[name=submit-btn-savereturnlater]').remove();
 					$('#surveyinstructions').after($('<div id="nedcaptcha2-instructions"></div>'));
+					$('input[type="hidden"]').each(function() {
+						if ($(this).attr('name') != 'redcap_csrf_token') {
+							$(this).remove();
+						}
+					});
+					window['nc2__dataEntrySubmit'] = window['dataEntrySubmit'];
+					window['dataEntrySubmit'] = function() {
+						if ($('input[name="{$captcha_field}"]').val() == '') {
+							$highlight_input
+							$('button[name=submit-btn-saverecord]').button('enable');
+							return false;
+						}
+						else {
+							return window['nc2__dataEntrySubmit']();
+						}
+					};
 				END;
-			$this->scripts_immediate[] = 
+			$this->scripts_top[] = 
 				<<<END
 					$jsmo.afterRender(function() {
 						$('#nedcaptcha2-instructions').html('').append($('[sq_id="{$instructions_field}"]').find('[data-kind="field-label"]').clone());
@@ -82,35 +131,36 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		// Remove Save & Continue Later button
 		$this->styles[] = "button[name=submit-btn-savereturnlater] { display: none; }";
-		$this->scripts_delayed[] = "$('button[name=submit-btn-savereturnlater]').remove();";
+		$this->scripts_regular[] = "$('button[name=submit-btn-savereturnlater]').remove();";
 
 		// Fail message? Hide it
 		if (isset($tagged[self::AT_FAILMESSAGE])) {
 			$failmessage_field = array_keys($tagged[self::AT_FAILMESSAGE])[0];
-			$this->scripts_delayed[] = "$('[sq_id=\"{$failmessage_field}\"]').hide();";
+			$this->scripts_regular[] = "$('[sq_id=\"{$failmessage_field}\"]').hide();";
 		}
 
-		$this->nedcaptcha_fields = [
-			array_keys($tagged[self::AT_SETUP])[0], 
-			array_keys($tagged[self::AT_INSTRUCTIONS] ?? [])[0], 
-			array_keys($tagged[self::AT_FAILMESSAGE] ?? [])[0]
-		];
 		$keep_fields = [ ...$this->nedcaptcha_fields ];
 		$keep_fields[] = $Proj->table_pk;
-		$keep_fields[] = "{$instrument}_complete";
+		if ($total_pages == 1) {
+			$keep_fields[] = "{$instrument}_complete";
+		}
 		$Proj->metadata = array_intersect_key($Proj->metadata, array_flip($keep_fields));
-
-		
-
+		$Proj->forms[$instrument]['fields'] = array_intersect_key($Proj->forms[$instrument]['fields'], array_flip($keep_fields));
 	}
 
 	private function validate_params($params) {
-		$params = json_decode($params);
-		if (!is_object($params)) {
+		$params = json_decode($params, true);
+		if (!is_array($params)) {
 			return false;
 		}
 		// TODO - more valiation
 		return $params;
+	}
+
+	function nedcaptcha2_cron_clean_log($cron_attributes) {
+		// Clear all log entries older than 10 minutes
+		$timestamp = date("Y-m-d H:i:s", time() - 600);
+		$this->framework->removeLogs("project_id > 0 and message LIKE '".self::STORE_KEY."%' and timestamp < ?", [$timestamp]);
 	}
 
 	/**
@@ -119,11 +169,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
 
 		if (!empty($this->errors)) {
-			foreach ($this->nedcaptcha_fields as $field) {
-				
-			}
 			foreach ($this->errors as $error) {
-				\RCView::script("console.error(".json_encode($error).");");
+				print \RCView::script("console.error('nedCAPTCHA 2: ' + ".json_encode($error).");");
 			}
 			return;
 		}
@@ -138,8 +185,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 
 		// Inject CSS and JavaScript - this is done here after jQuery has been loaded
+		print "<!-- nedCAPTCHA 2 -->\n";
 		print \RCView::style(join("\n", $this->styles));
-		print \RCView::script(join("\n", $this->scripts_immediate));
+		print \RCView::script(join("\n", $this->scripts_top));
 	}
 
 	function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
@@ -153,7 +201,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 
 		// Inject CSS and JavaScript - this is done here after jQuery has been loaded
-		print \RCView::script(join("\n", $this->scripts_delayed));
+		print "<!-- nedCAPTCHA 2 -->\n";
+		print \RCView::script(join("\n", $this->scripts_regular));
+		print \RCView::script(join("\n", $this->scripts_delayed), true);
 
 		return; 
 

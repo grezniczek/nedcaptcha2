@@ -24,6 +24,15 @@
             "description": "Apply to a decriptive field on the first survey page that will be shown when the user fails the CAPTCHA."
         }
     ],
+    "crons": [
+      {
+        "cron_name": "nedcaptcha2_cron",
+        "cron_description": "nedCAPTCHA 2 log expiration",
+        "method": "nedcaptcha2_cron_clean_log",
+        "cron_frequency": 60,
+        "cron_max_run_time": 1800
+      }  
+    ],
     "system-settings": [
         {
             "key": "globaldebug",
