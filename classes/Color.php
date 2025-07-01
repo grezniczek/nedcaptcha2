@@ -19,10 +19,15 @@ class Color
      * Parses a color value in the formats r,g,b[,a] or #rrggbb[aa] into a Color.
      * 
      * @param  string $input    The input to parse.
-     * @return Color|false      The corresponding color, or false if parsing failed.
+     * @return Color      The corresponding color, or the default color (fallback = red)
      */
-    public static function Parse($input)
-    {
+    public static function Parse($input, $default = null) {
+        if ($default === null) {
+            $default = new Color(255, 0, 0);
+        }
+        else {
+            $default = self::Parse($default);
+        }
         if (strpos($input, ",")) {
             // RegEx for r,g,b[,a] format.
             $re = '/\s*(?\'r\'\d+)\s*,\s*(?\'g\'\d+)\s*,\s*(?\'b\'\d+)\s*(,\s*(?\'a\'(1|0\.?\d*)))?/m';
@@ -50,6 +55,6 @@ class Color
                 return $color;
             }
         }        
-        return false;
+        return $default;
     }
 }

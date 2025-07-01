@@ -5,16 +5,16 @@ class CaptchaGenerator
     public $challenge;
     public $expected;
     public $error = null;
-    
+
+    // Pool of useable characters; optimized for readability
+    const IMAGE_CHARS = "23456789bcdfghjkmnpqrstvwxz";
 
     private $operators = array ("+", "-", "x");
     private $font;
 
-    public function __construct(CaptchaSettings $settings, $expected = null)
-    {
+    public function __construct($settings, $expected = null) {
         $this->font = dirname(dirname(__FILE__))."/fonts/AnonymousPro-Regular.ttf";
-        $this->expected = $expected;
-        switch ($settings->type) {
+        switch ($settings["type"]) {
             case "math":
                 $this->math($settings);
                 break;
@@ -29,38 +29,28 @@ class CaptchaGenerator
 
     /**
      * Prepares a custom CAPTCHA.
-     * 
-     * @param CaptchaSettings $settings
      */
     private function custom($settings) 
     {
-        // Check that challenge-response pairs are available.
-        $n = count($settings->custom);
-        if ($n == 0) {
-            $this->error = "No custom challenge-response pairs defined.";
-            return false;
-        }
-        // Pick a random one.
-        $index = mt_rand(0, $n - 1);
-        $this->challenge = $settings->custom[$index]["challenge"];
-        $this->expected = trim(strtolower($settings->custom[$index]["response"]));
+        // Pick a random challenge
+        $index = mt_rand(0, count($settings["custom"]) - 1);
+        $this->challenge = $settings["custom"][$index]["challenge"];
+        $this->expected = trim(strtolower($settings["custom"][$index]["response"]));
     }
 
     /**
      * Prepares a math CAPTCHA.
-     * 
-     * @param CaptchaSettings $settings
      */
     private function math($settings) 
     {
-        $complex = $settings->complexity == "complex";
+        $complex = $settings["complexity"] == "complex";
         // Build the problem.
         $nTerms = $complex ? 2 : 1;
-        $op = array();
-        $vals = array();
+        $op = [];
+        $vals = [];
         $problem = "";
         for ($i = 0; $i <= $nTerms; $i++) {
-            $vals[$i] = mt_rand($settings->minvalue, $settings->maxvalue);
+            $vals[$i] = mt_rand($settings["minValue"], $settings["maxValue"]);
         }
         for ($i = 0; $i < $nTerms; $i++) {
             $op[$i] = $this->operators[$complex ? mt_rand(0, 2) : 0];
@@ -87,7 +77,7 @@ class CaptchaGenerator
                 sort($vals);
                 $result = $vals[2] - $vals[1] - $vals[0];
                 if ($result < 0) {
-                    $vals[2] = $vals[1] + $vals[0] + mt_rand($settings->minvalue, $settings->maxvalue);
+                    $vals[2] = $vals[1] + $vals[0] + mt_rand($settings["minValue"], $settings["maxValue"]);
                     $result = $vals[2] - $vals[1] - $vals[0];
                 }
                 $problem = "{$vals[2]} - {$vals[1]} - {$vals[0]}";
@@ -149,10 +139,10 @@ class CaptchaGenerator
         }
         $this->expected = "{$result}";
         $challenge = "";
-        if ($settings->debug) {
+        if ($settings["debug"]) {
             $challenge = "{$problem} = {$result}";
         }
-        else if ($settings->usetext) {
+        else if ($settings["useText"]) {
             $challenge = $problem;
         }
         else {
@@ -177,8 +167,8 @@ class CaptchaGenerator
                 $this->error = "Cannot initialize GD image stream ({$width}, {$height}).";
                 return false;
             }
-            $bc = imagecolorallocate($img, $settings->backgroundColor->R, $settings->backgroundColor->G, $settings->backgroundColor->B);
-            $tc = imagecolorallocate($img, $settings->textColor->R, $settings->textColor->G, $settings->textColor->B);
+            $bc = imagecolorallocate($img, $settings["bgColor"]->R, $settings["bgColor"]->G, $settings["bgColor"]->B);
+            $tc = imagecolorallocate($img, $settings["textColor"]->R, $settings["textColor"]->G, $settings["textColor"]->B);
     
             // Fill the background.
             imagefill($img, 0, 0, $bc);
@@ -214,7 +204,7 @@ class CaptchaGenerator
     private function image($settings) 
     {
         // Set the expected result.
-        if (empty($this->expected)) $this->expected = self::generateChallenge($settings->length);
+        if (empty($this->expected)) $this->expected = self::generateChallenge($settings["length"]);
         
         $challenge = $this->generateImage($this->expected, $settings, 80);
         if ($challenge !== false) $this->challenge = $challenge;
@@ -223,9 +213,23 @@ class CaptchaGenerator
 
     private function generateImage($challenge, $settings, $height = 80)
     {
+        $angles = [
+             0, // none
+             7, // slight
+            11, // medium
+            15, // strong
+        ];
+        $densities = [
+             0.0, // off
+             0.6, // low
+             1.0, // medium
+             1.5, // high
+        ];
+
         $nChars = strlen($challenge);
         // Calculate the width based on the number of characters.
         $width = $height / 1.6 * $nChars;
+
 
         // Set the fontsize smaller than the height. 60% is good for the font used.
         $fontSize = $height * 0.6;
@@ -237,14 +241,14 @@ class CaptchaGenerator
                 $this->error = "Cannot initialize GD image stream ({$width}, {$height}).";
                 return false;
             }
-            $bc = imagecolorallocate($img, $settings->backgroundColor->R, $settings->backgroundColor->G, $settings->backgroundColor->B);
-            $tc = imagecolorallocate($img, $settings->textColor->R, $settings->textColor->G, $settings->textColor->B);
-            $nc = imagecolorallocate($img, $settings->noiseColor->R, $settings->noiseColor->G, $settings->noiseColor->B);
+            $bc = imagecolorallocate($img, $settings["bgColor"]->R, $settings["bgColor"]->G, $settings["bgColor"]->B);
+            $tc = imagecolorallocate($img, $settings["textColor"]->R, $settings["textColor"]->G, $settings["textColor"]->B);
+            $nc = imagecolorallocate($img, $settings["noiseColor"]->R, $settings["noiseColor"]->G, $settings["noiseColor"]->B);
     
             // Fill the background.
             imagefill($img, 0, 0, $bc);
             // Draw random dots.
-            for ($i = 0; $i < $width * $height * 0.1 * $settings->noiseDensity; $i++) {
+            for ($i = 0; $i < $width * $height * 0.1 * $settings["noiseDensity"]; $i++) {
                 imagefilledellipse($img, mt_rand(0, $width), mt_rand(0, $height), 1, 1, $nc);
             }
             // Create a textbox.
@@ -255,17 +259,20 @@ class CaptchaGenerator
             // Draw the text.
             $charWidth = ($width * 0.85) / $nChars;
             $y = ($height - $box[5]) / 2.2;
+            
             for ($i = 0; $i < strlen($challenge); $i++) {
                 $x = $width * 0.075 + $charWidth * $i;
                 // Vary the angle.
-                $a = mt_rand($settings->angle * -1, $settings->angle);
+                $angle = $angles[$settings["angleVariation"]];
+                $a = mt_rand($angle * -1, $angle);
                 if (false === imagettftext($img, $fontSize, $a, $x, $y, $tc, $this->font, substr($challenge, $i, 1))) {
                     $this->error = "Cannot create text [drawing].";
                     return false;
                 }
             }
             // Draw random lines.
-            for ($i = 0; $i < $width * 0.3 * $settings->noiseDensity; $i++) {
+            $noiseDensity = $densities[$settings["noiseDensity"]];
+            for ($i = 0; $i < $width * 0.3 * $noiseDensity; $i++) {
                 imageline($img, mt_rand(0, $width), mt_rand(0, $height), mt_rand(0, $width), mt_rand(0, $height), $nc);	
             }
             // Get the image.
@@ -293,8 +300,7 @@ class CaptchaGenerator
      */
     private static function generateChallenge($length)
     {
-        // Pool of useable characters; optimized for readability
-        $pool = "23456789bcdfghjkmnpqrstvwxz";
+        $pool = self::IMAGE_CHARS;
         $poolLastIndex = strlen($pool) - 1;
         $challenge = "";
         for ($i = 0; $i < $length; $i++) {
