@@ -13,6 +13,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	const AT_SETUP = "@NEDCAPTCHA";
 	const AT_INSTRUCTIONS = "@NEDCAPTCHA-INSTRUCTIONS";
 	const AT_FAILMESSAGE = "@NEDCAPTCHA-FAILMESSAGE";
+	const AT_DISPLAY = "@NEDCAPTCHA-DISPLAY";
 
 	/** @var int The number of minutes a CAPTCHA is valid for */
 	const CAPTCHA_EXPIRATION = 120; 
@@ -67,12 +68,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$tagged = ActionTagHelper::getActionTags([
 			self::AT_SETUP, 
 			self::AT_INSTRUCTIONS, 
-			self::AT_FAILMESSAGE
+			self::AT_FAILMESSAGE,
+			self::AT_DISPLAY,
 		], $page_fields[1], null, $context) ?? [];
 		$this->nedcaptcha_fields = array_filter([
 			array_keys($tagged[self::AT_SETUP] ?? [""])[0], 
 			array_keys($tagged[self::AT_INSTRUCTIONS] ?? [""])[0], 
-			array_keys($tagged[self::AT_FAILMESSAGE] ?? [""])[0]
+			array_keys($tagged[self::AT_FAILMESSAGE] ?? [""])[0],
+			array_keys($tagged[self::AT_DISPLAY] ?? [""])[0],
 		], function($v) { return $v !== ""; });
 
 		if ($returning || $stored["passed"] || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
@@ -89,7 +92,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// Validate parameters
 		$captcha_field = array_keys($tagged[self::AT_SETUP])[0];
 		$params = $this->validate_params($tagged[self::AT_SETUP][$captcha_field]["params"], true);
+		// Some debug logging
+		if ($params["debug"]) {
+			$this->scripts_top[] = "console.log('nedCAPTCHA 2: Parameters:',".json_encode(array_merge($params, ["custom" => "[REDCATED]"])).");";
+		}
 		if ($params["type"] == "none") {
+			$this->scripts_top[] = "console.log('nedCAPTCHA 2: No CAPTCHA required.');";
 			foreach ($this->nedcaptcha_fields as $field) {
 				unset($Proj->metadata[$field]);
 				unset($Proj->forms[$instrument]['fields'][$field]);
@@ -128,6 +136,16 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$_SERVER["REQUEST_METHOD"] = "GET";
 			// Clear all warnings
 			$this->warnings = [];
+			if ($params["capture"]) {
+				// Capture the response
+				$this->scripts_regular[] = "$('form#form').append($('<input name=\"{$captcha_field}\" value=\"{$response}\" type=\"hidden\">'));";
+			}
+			if ($params["debug"]) {
+				$this->scripts_top[] = "console.log('nedCAPTCHA 2: CAPTCHA passed.');";
+				if ($params["capture"]) {
+					$this->scripts_top[] = "console.log('nedCAPTCHA 2: Response captured: {$response}');";
+				}
+			}
 			return;
 		}
 
@@ -150,7 +168,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		$jsmo = $this->framework->getJavascriptModuleObjectName();
 
-		$highlight_input = "$('input[name=\"{$captcha_field}\"]').css({ 'outline': '2px solid red'}).after($('<i class=\"fa-solid fa-exclamation-circle fa-lg ms-2 text-danger\"></i>')).get(0).focus();";
+		$highlight_input = "$('i.nedcaptcha2-highlight').remove(); $('input[name=\"{$captcha_field}\"]').css({ 'outline': '2px solid red'}).after($('<i class=\"fa-solid fa-exclamation-circle fa-lg ms-2 text-danger nedcaptcha2-highlight\"></i>')).get(0).focus();";
 	
 		// Substitute survey instructions?
 		if (isset($tagged[self::AT_INSTRUCTIONS])) {
@@ -206,6 +224,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 		if ($fail_action == "show") {
 			$this->scripts_regular[] = $highlight_input;
+			if ($params["debug"]) {
+				$this->scripts_top[] = "console.log('nedCAPTCHA 2: CAPTCHA failed. Retrying...');";
+			}
+		}
+		else if ($params["debug"]) {
+			$this->scripts_top[] = "console.log('nedCAPTCHA 2: Presenting CAPTCHA ...');";
 		}
 
 		$keep_fields = [ ...$this->nedcaptcha_fields ];
@@ -237,6 +261,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$full["angleVariation"] = max(0, min(3, intval($params["angleVariation"] ?? 2)));
 		// bgColor
 		$full["bgColor"] = Color::Parse($params["bgColor"] ?? "#f3f3f3");
+		// capture (boolean, default false)
+		$full["capture"] = isset($params["capture"]) ? $params["capture"] === true : false;
 		// custom (array)
 		if (isset($params["custom"]) && !is_array($params["custom"])) {
 			$this->warnings[] = "Invalid entry 'custom' parameter, defaulting to empty array.";
@@ -276,6 +302,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$full["noiseDensity"] = max(0, min(3, intval($params["noiseDensity"] ?? 2)));
 		// reuse (boolean, default false)
 		$full["reuse"] = isset($params["reuse"]) ? $params["reuse"] === true : false;
+		// sizeVariation (0-3, default 2)
+		$full["sizeVariation"] = max(0, min(3, intval($params["sizeVariation"] ?? 1)));
 		// textColor
 		$full["textColor"] = Color::Parse($params["textColor"] ?? "#800000");
 		// type (none/math/image/custom, default math)

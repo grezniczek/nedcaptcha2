@@ -13,6 +13,7 @@ class CaptchaGenerator
     private $font;
 
     public function __construct($settings, $expected = null) {
+        $this->expected = $expected;
         $this->font = dirname(dirname(__FILE__))."/fonts/AnonymousPro-Regular.ttf";
         switch ($settings["type"]) {
             case "math":
@@ -225,14 +226,20 @@ class CaptchaGenerator
              1.0, // medium
              1.5, // high
         ];
+        $fontsizes = [
+             [1, 1],
+             [0.9, 1.1],
+             [0.8, 1.2],
+             [0.7, 1.3],  
+        ];
 
         $nChars = strlen($challenge);
         // Calculate the width based on the number of characters.
         $width = $height / 1.6 * $nChars;
-
-
         // Set the fontsize smaller than the height. 60% is good for the font used.
         $fontSize = $height * 0.6;
+        $fontSizeMin = $fontSize * $fontsizes[$settings["sizeVariation"]][0];
+        $fontSizeMax = $fontSize * $fontsizes[$settings["sizeVariation"]][1];
         
         try {
             // Create the image.
@@ -265,7 +272,8 @@ class CaptchaGenerator
                 // Vary the angle.
                 $angle = $angles[$settings["angleVariation"]];
                 $a = mt_rand($angle * -1, $angle);
-                if (false === imagettftext($img, $fontSize, $a, $x, $y, $tc, $this->font, substr($challenge, $i, 1))) {
+                $this_fontsize = mt_rand($fontSizeMin * 10, $fontSizeMax * 10) / 10;
+                if (false === imagettftext($img, $this_fontsize, $a, $x, $y, $tc, $this->font, substr($challenge, $i, 1))) {
                     $this->error = "Cannot create text [drawing].";
                     return false;
                 }
