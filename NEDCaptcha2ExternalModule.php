@@ -65,7 +65,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		// Check for action tags
 		require_once "classes/ActionTagHelper.php";
-		$tagged = ActionTagHelper::getActionTags([
+		$tagged = ActionTagHelper::getActionTags($project_id, [
 			self::AT_SETUP, 
 			self::AT_INSTRUCTIONS, 
 			self::AT_FAILMESSAGE,
@@ -241,6 +241,100 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$Proj->forms[$instrument]['fields'] = array_intersect_key($Proj->forms[$instrument]['fields'], array_flip($keep_fields));
 	}
 
+	function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
+
+		// Check if this is a fresh (i.e., not associated with any record) public survey
+		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
+		// Skip the CAPTCHA if a record is already defined or it is set to inactive.
+		if (!$is_fresh_public) return;
+
+
+		if (!empty($this->warnings)) {
+			foreach ($this->warnings as $warning) {
+				print \RCView::script("console.warn('nedCAPTCHA 2: ' + ".json_encode($warning).");");
+			}
+		}
+		if (!empty($this->errors)) {
+			foreach ($this->errors as $error) {
+				print \RCView::script("console.error('nedCAPTCHA 2: ' + ".json_encode($error).");");
+			}
+			return;
+		}
+
+		if (!$this->active) return;
+
+		$this->initializeJavascriptModuleObject();
+
+		// Inject CSS and JavaScript - this is done here after jQuery has been loaded
+		print "<!-- nedCAPTCHA 2 -->\n";
+		print \RCView::style(join("\n", $this->styles));
+		print \RCView::script(join("\n", $this->scripts_top));
+	}
+
+	function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
+
+		// Check if this is a fresh (i.e., not associated with any record) public survey
+		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
+		// Skip the CAPTCHA if a record is already defined or it is set to inactive.
+		if (!$is_fresh_public || !$this->active) return;
+
+		// Inject CSS and JavaScript - this is done here after jQuery has been loaded
+		print "<!-- nedCAPTCHA 2 -->\n";
+		print \RCView::script(join("\n", $this->scripts_regular));
+		print \RCView::script(join("\n", $this->scripts_delayed), true);
+	}
+
+	function redcap_every_page_top($project_id) {
+		$page = defined("PAGE") ? PAGE : "";
+		
+		if ($page == "Design/online_designer.php" && isset($_GET["page"])) {
+			$instrument = $_GET["page"];
+			$this->inject_online_designer($project_id, $instrument);
+		}
+	}
+
+	function redcap_module_ajax($action, $payload, $project_id, $record, $instrument, $event_id, $repeat_instance, $survey_hash, $response_id, $survey_queue_hash, $page, $page_full, $user_id, $group_id) {
+
+		if ($action == "get-params") {
+			$Proj = new \Project($project_id);
+			$metadata = $Proj->getMetadata();
+			$field = $payload["field"];
+
+			require_once "classes/ActionTagHelper.php";
+			$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], $field, null, null, true)[self::AT_SETUP] ?? [];
+
+			if (count($tagged) == 0) return "ERROR";
+
+			$params = $this->validate_params($tagged[$field]["params"], false);
+			unset($params["debug"]);
+			$defaults = $this->validate_params($tagged[$field]["params"], true);
+			unset($defaults["debug"]);
+
+			return [
+				"params" => $params,
+				"defaults" => $defaults,
+			];
+		}
+		
+
+		return "Not implemented yet: $action";
+	}
+
+	#endregion
+
+	#region Crons
+
+	function nedcaptcha2_cron_clean_log($cron_attributes) {
+		// Clear all expired log entries
+		$timestamp = date("Y-m-d H:i:s", time() - (self::CAPTCHA_EXPIRATION * 60));
+		$sql = "project_id > 0 and message LIKE '".self::STORE_KEY."%' and timestamp < ?";
+		$this->framework->removeLogs($sql, [$timestamp]);
+	}
+
+	#endregion
+
+	#region Private Methods
+
 	/**
 	 * Validate parameters
 	 * @param mixed $params 
@@ -334,55 +428,31 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 	}
 
-	function nedcaptcha2_cron_clean_log($cron_attributes) {
-		// Clear all expired log entries
-		$timestamp = date("Y-m-d H:i:s", time() - (self::CAPTCHA_EXPIRATION * 60));
-		$sql = "project_id > 0 and message LIKE '".self::STORE_KEY."%' and timestamp < ?";
-		$this->framework->removeLogs($sql, [$timestamp]);
-	}
+	private function inject_online_designer($project_id, $instrument) {
+		/** @var Project */
+		$Proj = $GLOBALS['Proj'];
 
-	function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
+		// Check for action tags
+		require_once "classes/ActionTagHelper.php";
+		$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], null, [$instrument], null, true)[self::AT_SETUP] ?? [];
 
-		// Check if this is a fresh (i.e., not associated with any record) public survey
-		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
-		// Skip the CAPTCHA if a record is already defined or it is set to inactive.
-		if (!$is_fresh_public) return;
+		if (count($tagged) == 0) return;
 
-
-		if (!empty($this->warnings)) {
-			foreach ($this->warnings as $warning) {
-				print \RCView::script("console.warn('nedCAPTCHA 2: ' + ".json_encode($warning).");");
-			}
-		}
-		if (!empty($this->errors)) {
-			foreach ($this->errors as $error) {
-				print \RCView::script("console.error('nedCAPTCHA 2: ' + ".json_encode($error).");");
-			}
-			return;
-		}
-
-		if (!$this->active) return;
-
-		$this->initializeJavascriptModuleObject();
-
-		// Inject CSS and JavaScript - this is done here after jQuery has been loaded
-		print "<!-- nedCAPTCHA 2 -->\n";
-		print \RCView::style(join("\n", $this->styles));
-		print \RCView::script(join("\n", $this->scripts_top));
-	}
-
-
-	function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
-
-		// Check if this is a fresh (i.e., not associated with any record) public survey
-		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
-		// Skip the CAPTCHA if a record is already defined or it is set to inactive.
-		if (!$is_fresh_public || !$this->active) return;
-
-		// Inject CSS and JavaScript - this is done here after jQuery has been loaded
-		print "<!-- nedCAPTCHA 2 -->\n";
-		print \RCView::script(join("\n", $this->scripts_regular));
-		print \RCView::script(join("\n", $this->scripts_delayed), true);
+		require_once "classes/InjectionHelper.php";
+		$ih = InjectionHelper::init($this);
+		$ih->css("css/nedCAPTCHA2.css");
+		$ih->js("js/nedCAPTCHA2.js");
+		$this->framework->initializeJavascriptModuleObject();
+		$jsmo = $this->framework->getJavascriptModuleObjectName();
+		$config = [
+			"debug" => $this->getProjectSetting("debug") == true,
+			"version" => $this->VERSION,
+			"tagged" => array_keys($tagged),
+			"at" => self::AT_SETUP,
+			"linkTitle" => "Edit CAPTCHA settings",
+		];
+		print \RCView::script("DE_ELISABETHGRUPPE_nedCAPTCHA2.init(".
+			json_encode($config).", $jsmo);");
 	}
 
 	#endregion

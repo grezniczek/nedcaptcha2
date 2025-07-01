@@ -1,0 +1,19 @@
+/*
+ * nedCAPTCHA 2 EM 
+ * Dr. Günther Rezniczek, Marien Hospital Herne, Klinikum der Ruhr-Universität Bochum
+ */
+.nedCAPTCHA-OD-link  {
+	text-decoration: none;
+	outline: none;
+}
+.nedCAPTCHA-OD-link:link {
+	color: inherit;
+}
+.nedCAPTCHA-OD-link:hover, .nedCAPTCHA-OD-link:focus { 
+	outline: none;
+	color: purple;
+	text-decoration: solid underline blueviolet;
+}
+.nedCAPTCHA-OD-accent {
+	color: purple;
+}

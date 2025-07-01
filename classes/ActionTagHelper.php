@@ -25,7 +25,7 @@ class ActionTagHelper
      *                              "field_name": [
      *                                  "params": any parameters next to tag (supports string, list, or json)
      */
-    static function getActionTags($tags = NULL, $fields = NULL, $instruments = NULL, $context = NULL) {
+    static function getActionTags($project_id ,$tags = NULL, $fields = NULL, $instruments = NULL, $context = NULL, $tryDraftMode = false) {
 
         // Check to see if this search has been cached
         $arg_key = md5(json_encode(func_get_args()));
@@ -39,18 +39,25 @@ class ActionTagHelper
             if (!is_array($tags)) $tags = array($tags);
             $tags = array_map('strtoupper', $tags);
         }
-        // Plugin::log($tag_filter,"DEBUG","tag filter ");
+        $Proj = new \Project($project_id);
+        $metadata = $tryDraftMode ? $Proj->getMetadata() : $Proj->metadata;
+        $forms = $tryDraftMode ? $Proj->getForms() : $Proj->forms;
 
-        // Get the metadata with applied filters
-        $q = REDCap::getDataDictionary('json', false, $fields, $instruments);
-        $metadata = json_decode($q,true);
-        // Plugin::log($metadata,"DEBUG","Metadata");
-
+        if ($instruments !== null && !is_array($instruments)) $instruments = array($instruments);
+        if ($fields !== null && !is_array($fields)) $fields = array($fields);
+        if ($fields === null) {
+            if (is_array($instruments)) {
+                $fields = [];
+                foreach ($instruments as $instrument) {
+                    $fields = array_merge($fields, array_keys($forms[$instrument]['fields']));
+                }
+            }
+        }
         // Build action_tag array
         $action_tags = array();
-        foreach ($metadata as $field) {
-            $field_name = $field['field_name'];
-            $field_annotation = $field['field_annotation'];
+        foreach ($fields as $field_name) {
+            $field = $metadata[$field_name];
+            $field_annotation = $field['misc'];
             if (is_array($context) && strpos($field_annotation, "@IF") !== false) {
                 $field_annotation = \Form::replaceIfActionTag($field_annotation, $context['project_id'] ?? null, $context['record'] ?? null, $context['event_id'] ?? null, $context['instrument'] ?? null, $context['instance'] ?? 1);
             }

@@ -44,5 +44,9 @@
             "type": "checkbox",
             "super-users-only": true
         }
+    ],
+    "auth-ajax-actions": [
+        "get-params",
+        "set-params"
     ]
 }
