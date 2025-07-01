@@ -110,9 +110,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		// Get response
 		$response = isset($_POST[$captcha_field]) ? "{$_POST[$captcha_field]}" : "";
-		if ($params["type"] == "custom") {
-			$response = mb_strtolower($response);
-		}
+		$response = mb_strtolower($response);
 		$passed = $stored["passed"] || 
 			($stored["expected"] != null && $stored["expected"] == $response);
 
