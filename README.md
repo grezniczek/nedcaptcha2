@@ -18,14 +18,14 @@ The _Custom_ CAPTCHA option could be used to implement simple password protectio
 
 ## Requirements
 
-- REDCap 11.1.5 or newer.
+- REDCap 15.5.0 or newer.
 - The GD library **with FreeType** support must be installed in PHP.
 
 ## Installation
 
-- Clone this repo into `<redcap-root>/modules/redcap_nedcaptcha_v<version-number>`, or
+- Clone this repo into `<redcap-root>/modules/nedcaptcha2_v<version-number>`, or
 - Obtain this module from the Consortium [REDCap Repo](https://redcap.vumc.org/consortium/modules/index.php) via the Control Center.
-- Go to _Control Center > Technical / Developer Tools > External Modules_ and enable 'nedCAPTCHA'.
+- Go to _Control Center > Technical / Developer Tools > External Modules_ and enable 'nedCAPTCHA 2'.
 - Enable in projects that require public survey protection.
 
 ## Configuration
@@ -103,38 +103,26 @@ Instructions for testing the module can be found [here](?prefix=redcap_nedcaptch
 
 Version | Changes
 ------- | -----------
-1.4.2   | Fix repo link.<br>Add citation info.
-1.4.1   | Better screenreader support.
-1.4.0   | Adds "Math as text" configuration option to support people relying on screen readers.
-1.3.0   | Requires EM Framework version 14 (REDCap 13.7.3).<br>Additional input validations.
-1.2.0   | Requires EM Framework version 8 (REDCap 11.1.5).
-1.1.0   | Add "Always ask" option.<br>Bugfix: Debug mode was not working as intended.
-1.0.6   | Re-Fix: Prevent "hook not completed" error.
-1.0.5   | Bugfix: Prevent "hook not completed" error.
-1.0.4   | Updated behavior: Query params for setting fields is now supported (no need for _startover any longer).
-1.0.3   | Add the GD + FreeType requirement to the documentation. Improved error handling.
-1.0.2   | Add instructions for testing the module.
-1.0.1   | Bug fixes.
 1.0.0   | Initial release.
 
 ## How to cite this work
 
 If you use this external module for a project that generates a research output, please cite this software in addition to [citing REDCap](https://projectredcap.org/resources/citations/). You can do so using the APA referencing style as below:
 
-> Rezniczek, G. A. (2025). nedCAPTCHA (REDCap External Module) [Computer software]. https://doi.org/10.5281/zenodo.15411596.
+> Rezniczek, G. A. (2025). nedCAPTCHA 2 (REDCap External Module) [Computer software]. https://doi.org/10.5281/zenodo.xxx.
 
 Or by adding this reference to your BibTeX database:
 
 ```bibtex
 @software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2025,
   author = {Rezniczek, Günther A.},
-  title = {{nedCAPTCHA (REDCap External Module)}},
-  version = {1.4.2},
+  title = {{nedCAPTCHA 2 (REDCap External Module)}},
+  version = {1.0.0},
   year = {2025}
-  month = {5},
-  doi = {10.5281/zenodo.15411596},
-  url = {https://github.com/grezniczek/redcap_nedcaptcha},
+  month = {7},
+  doi = {10.5281/zenodo.xxx},
+  url = {https://github.com/grezniczek/nedcaptcha2},
 }
 ```
 
-These instructions are also available in [GitHub](https://github.com/grezniczek/redcap_nedcaptcha) under 'Cite This Repository'.
+These instructions are also available in [GitHub](https://github.com/grezniczek/nedcaptcha2) under 'Cite This Repository'.
