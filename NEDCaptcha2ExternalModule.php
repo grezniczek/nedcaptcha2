@@ -76,7 +76,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			array_keys($tagged[self::AT_INSTRUCTIONS] ?? [""])[0], 
 			array_keys($tagged[self::AT_FAILMESSAGE] ?? [""])[0],
 			array_keys($tagged[self::AT_DISPLAY] ?? [""])[0],
-		], function($v) { return $v !== ""; });
+		], function($v) { return !empty($v); });
 
 		if ($returning || $stored["passed"] || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
 			// We are outside any context where the CAPTCHA should be shown
@@ -177,10 +177,17 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$this->styles[] = "#surveyinstructions-reveal { display: none !important; }";
 			$this->styles[] = "#nedcaptcha2-instructions { padding: 0 10px 15px; }";
 			$this->styles[] = ".nedcaptcha2-challenge { margin: 0 5px 10px 5px;}";
-			$this->scripts_regular[] = 
+			$this->scripts_regular[] = "$('#surveyinstructions').after($('<div id=\"nedcaptcha2-instructions\"></div>'));";
+			$this->scripts_top[] = 
+				<<<END
+					$jsmo.afterRender(function() {
+						$('#nedcaptcha2-instructions').html('').append($('[sq_id="{$instructions_field}"]').find('[data-kind="field-label"]').clone());
+					});
+				END;
+		}
+		$this->scripts_regular[] = 
 				<<<END
 					$('button[name=submit-btn-savereturnlater]').remove();
-					$('#surveyinstructions').after($('<div id="nedcaptcha2-instructions"></div>'));
 					$('input[type="hidden"]').each(function() {
 						if ($(this).attr('name') != 'redcap_csrf_token') {
 							$(this).remove();
@@ -198,14 +205,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 						}
 					};
 				END;
-			$this->scripts_top[] = 
-				<<<END
-					$jsmo.afterRender(function() {
-						$('#nedcaptcha2-instructions').html('').append($('[sq_id="{$instructions_field}"]').find('[data-kind="field-label"]').clone());
-					});
-				END;
-		}
-
 		// Remove Save & Continue Later button
 		$this->styles[] = "button[name=submit-btn-savereturnlater] { display: none; }";
 		$this->scripts_regular[] = "$('button[name=submit-btn-savereturnlater]').remove();";
