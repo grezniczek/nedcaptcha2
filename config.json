@@ -48,5 +48,14 @@
     "auth-ajax-actions": [
         "get-params",
         "set-params"
-    ]
+    ],
+    "links": {
+        "project": [
+            {
+                "name": "Test",
+                "url": "setup-ui.php",
+                "show-header-and-footer": true
+            }
+        ]
+    }
 }
