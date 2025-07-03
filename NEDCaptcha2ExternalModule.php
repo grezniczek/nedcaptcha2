@@ -54,18 +54,18 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$result = $this->queryLogs("SELECT expected, passed WHERE message = ?", $store_key);
 		$stored = $result->fetch_assoc() ?? [ "expected" => null, "passed" => false ];
 
-		$this->scripts_delayed[] = "$('input[name=\"redcap_csrf_token\"]').after($('<input type=\"hidden\" name=\"".self::CLIENT_KEY."\" value=\"$client_key\">'));";
-
-		/** @var \Project */
+				/** @var \Project */
 		$Proj = $GLOBALS["Proj"];
 		// Obtain survey info
 		$context = \Survey::getSurveyContextFromSurveyHash($sh);
-		$instrument = $context["form_name"];
-		$context["instrument"] = $instrument;
+		// Check if this is a valid instrument
+		if (!array_key_exists($context["form_name"] ?? "__", $Proj->forms)) return;
+		// Prepare context
+		$context["instrument"] = $context["form_name"]; // Rename and augment for use in ActionTagHelper
 		$context["record"] = null;
 		$context["instance"] = 1;
-		list($page_fields, $total_pages) = \Survey::getPageFields($instrument, true);
-
+		list($page_fields, $total_pages) = \Survey::getPageFields($context["instrument"], true);
+		
 		// Check for action tags
 		require_once "classes/ActionTagHelper.php";
 		$tagged = ActionTagHelper::getActionTags($project_id, [
@@ -149,6 +149,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 			return;
 		}
+
+		// Add client key to form
+		$this->scripts_delayed[] = "$('input[name=\"redcap_csrf_token\"]').after($('<input type=\"hidden\" name=\"".self::CLIENT_KEY."\" value=\"$client_key\">'));";
 
 		// Setup the CAPTCHA for display
 		if ($params["type"] == "math") {
