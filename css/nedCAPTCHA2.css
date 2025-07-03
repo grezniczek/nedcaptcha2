@@ -30,3 +30,45 @@
 .nedCAPTCHA-setup-main {
 	width: 50%;
 }
+.nedCAPTCHA-setup-sidebar {
+	max-width: 50%;
+}
+.nedCAPTCHA-setup-title {
+	font-weight: bold;
+}
+.nedCAPTCHA-setup-group {
+	margin: .25em .5em 1em .5em;
+}
+.nedCAPTCHA-setup-group label {
+	margin: unset;
+}
+.nedCAPTCHA-setup-group .form-check {
+	min-height: unset;
+}
+.nedCAPTCHA-setup-section {
+	margin: 0 1rem .25rem 1rem;
+	padding-left: .25rem;
+}
+.nedCAPTCHA-setup-setting { margin-top: .25rem; }
+.nedCAPTCHA-setup-description {
+	font-size: 90%; 
+	font-style: italic;
+	margin-bottom: 5px;
+}
+.nedCAPTCHA-setup-setting select { font-size: 85%; max-width: fit-content; }
+.nedCAPTCHA-setup-range {
+	display: flex;
+	gap: 1em;
+	align-items: center;
+	margin-top: .25em;
+}
+.nedCAPTCHA-setup-setting .form-control-color {
+	width: 100px;
+	font-size: 90%;
+}
+.nedCAPTCHA-preview {
+	outline: 1px dotted black;
+	outline-offset: 2px;
+	margin: 3px;
+
+}

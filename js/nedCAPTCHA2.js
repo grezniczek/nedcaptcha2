@@ -49,8 +49,8 @@ function insertOnlineDesignerLinks() {
 			const orig = $(this).html();
 			$(this).html(orig.replace(config.at, '<a class="nedCAPTCHA-OD-link" data-bs-toggle="tooltip" title="'+config.linkTitle+'" href="javascript:' + NS_PREFIX + EM_NAME + '.edit(\'' + field + '\');">' + config.at.replace('@', '<span class="nedCAPTCHA-OD-accent">@</span>') + '</a>'));
 		});
-		new bootstrap.Tooltip($('.nedCAPTCHA-OD-link'), {
-			trigger: 'hover'
+		$('.nedCAPTCHA-OD-link').each(function() {
+			new bootstrap.Tooltip(this, { trigger: 'hover' });
 		});
 	}
 }

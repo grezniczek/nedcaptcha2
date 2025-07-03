@@ -112,11 +112,22 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$this->active = true;
 
 		// Get response
-		$response = isset($_POST[$captcha_field]) ? "{$_POST[$captcha_field]}" : "";
-		$response = mb_strtolower($response);
+		$response = isset($_POST[$captcha_field]) ? trim("{$_POST[$captcha_field]}") : "";
+		$expected = $stored["expected"];
+		if ($params["type"] == "custom") {
+			if ($params["caseInsensitive"]) {
+				$response = mb_strtolower($response);
+				$expected = mb_strtolower($expected);
+			}
+		}
+		else {
+			$response = strtolower($response);
+		}
+		// Check response
 		$passed = $stored["passed"] || 
-			($stored["expected"] != null && $stored["expected"] == $response);
+			($expected != null && $expected == $response);
 
+		// Reset expected?
 		$expected = ($passed || $params["reuse"]) ? $stored["expected"] : null;
 
 		$captcha = new CaptchaGenerator($params, $expected);
@@ -360,6 +371,15 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$full["bgColor"] = Color::Parse($params["bgColor"] ?? "#f3f3f3");
 		// capture (boolean, default false)
 		$full["capture"] = isset($params["capture"]) ? $params["capture"] === true : false;
+		// caseInsensitive (boolean, default false)
+		$full["caseInsensitive"] = isset($params["caseInsensitive"]) ? $params["caseInsensitive"] === true : false;
+		// complexity (simple/complex, default simple)
+		if (!isset($params["complexity"]) || !in_array($params["complexity"], ["simple", "complex"])) {
+			if (isset($params["complexity"])) {
+				$this->warnings[] = "Invalid 'complexity' parameter, defaulting to 'simple'.";
+			}
+			$full["complexity"] = "simple";
+		}
 		// custom (array)
 		if (isset($params["custom"]) && !is_array($params["custom"])) {
 			$this->warnings[] = "Invalid entry 'custom' parameter, defaulting to empty array.";
@@ -379,13 +399,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 					"response" => $pair["response"]
 				];
 			}
-		}
-		// complexity (simple/complex, default simple)
-		if (!isset($params["complexity"]) || !in_array($params["complexity"], ["simple", "complex"])) {
-			if (isset($params["complexity"])) {
-				$this->warnings[] = "Invalid 'complexity' parameter, defaulting to 'simple'.";
-			}
-			$full["complexity"] = "simple";
 		}
 		// length (3-10, default 6)
 		$full["length"] = min(10, max(intval($params["length"] ?? 6), 3));
