@@ -1,6 +1,8 @@
 <?php namespace DE\ELISABETHGRUPPE\NEDCaptcha2ExternalModule;
 
-class Color 
+use JsonSerializable;
+
+class Color implements JsonSerializable
 {
     public $R;
     public $G;
@@ -57,4 +59,27 @@ class Color
         }        
         return $default;
     }
+
+	public function getHex() {
+		if ($this->A < 1) {
+			return sprintf('#%02X%02X%02X%02X', $this->R, $this->G, $this->B, $this->A * 255);
+		}
+		return sprintf('#%02X%02X%02X', $this->R, $this->G, $this->B);
+	}
+
+	public function getRgb() {
+		if ($this->A < 1) {
+			return sprintf('rgba(%d, %d, %d, %f)', $this->R, $this->G, $this->B, $this->A);
+		}
+		return sprintf('rgb(%d, %d, %d)', $this->R, $this->G, $this->B);
+	}
+
+	public function __toString() {
+		return $this->getHex();
+	}
+
+	public function jsonSerialize():string {
+		return (string)$this;
+	}
+
 }
