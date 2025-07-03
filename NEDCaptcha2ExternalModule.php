@@ -428,8 +428,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$full["type"] = "math";
 			$this->warnings[] = "No custom challenge-response pairs defined. Defaulting to \"math\" CAPTCHA.";
 		}
-		// useText (boolean, default false)
-		$full["useText"] = isset($params["useText"]) ? $params["useText"] === true : false;
+		// showAsText (boolean, default false)
+		$full["showAsText"] = isset($params["showAsText"]) ? $params["showAsText"] === true : false;
 		// Return validated / default parameters
 		if ($set_defaults) {
 			return $full;

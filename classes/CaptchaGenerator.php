@@ -143,7 +143,7 @@ class CaptchaGenerator
         if ($settings["debug"]) {
             $challenge = "{$problem} = {$result}";
         }
-        else if ($settings["useText"]) {
+        else if ($settings["showAsText"]) {
             $challenge = $problem;
         }
         else {
