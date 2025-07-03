@@ -35,7 +35,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$page = defined("PAGE") ? PAGE : "";
 		if ($page != "surveys/index.php") return;
 		$psh = $this->framework->getPublicSurveyHash($project_id);
-		$sh = $_GET["s"];
+		$sh = $_GET["s"] ?? "";
+
+		// Stop here if there is no survey hash (includes, e.g., the close window page)
+		if ($sh == "") return;
 
 		// Do not interfere with returning
 		if ($_SERVER['REQUEST_METHOD'] == 'GET' && $_GET["__return"] == "1") return;
