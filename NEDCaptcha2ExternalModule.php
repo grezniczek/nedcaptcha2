@@ -61,10 +61,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// Check if this is a valid instrument
 		if (!array_key_exists($context["form_name"] ?? "__", $Proj->forms)) return;
 		// Prepare context
-		$context["instrument"] = $context["form_name"]; // Rename and augment for use in ActionTagHelper
+		$instrument = $context["instrument"] = $context["form_name"]; // Rename and augment for use in ActionTagHelper
 		$context["record"] = null;
 		$context["instance"] = 1;
-		list($page_fields, $total_pages) = \Survey::getPageFields($context["instrument"], true);
+		list($page_fields, $total_pages) = \Survey::getPageFields($instrument, true);
 		
 		// Check for action tags
 		require_once "classes/ActionTagHelper.php";
