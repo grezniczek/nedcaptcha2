@@ -1,49 +1,76 @@
-<?php
+<?php namespace DE\ELISABETHGRUPPE\NEDCaptcha2ExternalModule;
 
-namespace DE\ELISABETHGRUPPE\NEDCaptcha2ExternalModule;
+$is_plugin = !isset($defaults) || !isset($defaults["type"]);
+if ($is_plugin) {
+	require_once "classes/InjectionHelper.php";
+	$ih = InjectionHelper::init($module);
+	$ih->css("css/nedCAPTCHA2.css");
+	$defaults = $module->validate_params("{}", true);
+}
 
-require_once "classes/InjectionHelper.php";
-$ih = InjectionHelper::init($module);
-$ih->css("css/nedCAPTCHA2.css");
+$custom_pairs = "";
+foreach ($defaults["custom"] ?? [] as $pair) {
+	$custom_pairs .= $pair["challenge"] . "=" . $pair["response"] . "\n";
+}
 
-$m = $module;
 ?>
 <div class="nedCAPTCHA-setup-container">
 	<div class="nedCAPTCHA-setup-main">
 		<div class="nedCAPTCHA-setup-title">CAPTCHA Type</div>
 		<div class="nedCAPTCHA-setup-group">
 			<div class="form-check">
-				<input class="form-check-input" type="radio" name="type" id="type2" value="math">
-				<label class="form-check-label" for="type2">
+				<input class="form-check-input" type="radio" name="type" id="type-math" value="math" <?=$defaults["type"] == "math" ? "checked" : ""?>>
+				<label class="form-check-label" for="type-math">
 					Math Problem
 				</label>
 			</div>
 			<div class="form-check">
-				<input class="form-check-input" type="radio" name="type" id="type3" value="image">
-				<label class="form-check-label" for="type3">
+				<input class="form-check-input" type="radio" name="type" id="type-image" value="image" <?=$defaults["type"] == "image" ? "checked" : ""?>>
+				<label class="form-check-label" for="type-image">
 					Distorted Image
 				</label>
 			</div>
 			<div class="form-check">
-				<input class="form-check-input" type="radio" name="type" id="type4" value="custom">
-				<label class="form-check-label" for="type4">
+				<input class="form-check-input" type="radio" name="type" id="type-custom" value="custom" <?=$defaults["type"] == "custom" ? "checked" : ""?>>
+				<label class="form-check-label" for="type-custom">
 					Custom Challenge/Response
 				</label>
 			</div>
 			<div class="form-check mt-2">
-				<input class="form-check-input" type="radio" name="type" id="type1" value="none">
-				<label class="form-check-label" for="type1">
+				<input class="form-check-input" type="radio" name="type" id="type-none" value="none" <?=$defaults["type"] == "none" ? "checked" : ""?>>
+				<label class="form-check-label" for="type-none">
 					Disabled
 				</label>
 			</div>
 		</div>
-
-		Type, Common
+		<div class="nedCAPTCHA-setup-title">Common Options</div>
+		<div class="nedCAPTCHA-setup-group">
+			<div class="form-check mt-2">
+				<input class="form-check-input" type="checkbox" name="capture" id="nedCAPTCHA-capture" <?=$defaults["capture"] ? "checked" : ""?>>
+				<label class="form-check-label mb-1" for="nedCAPTCHA-capture">
+					Capture response
+				</label>
+				<div class="nedCAPTCHA-setup-description">
+					By default, responses are not captured. With this option, responses are captured into the field with the <code>@NEDCAPTCHA</code> action tag.
+				</div>
+			</div>
+		</div>
+		<div class="nedCAPTCHA-setup-group">
+			<div class="form-check mt-2">
+				<input class="form-check-input" type="checkbox" name="reuse" id="nedCAPTCHA-reuse" <?=$defaults["reuse"] ? "checked" : ""?>>
+				<label class="form-check-label mb-1" for="nedCAPTCHA-reuse">
+					Re-use challenge
+				</label>
+				<div class="nedCAPTCHA-setup-description">
+					By default, a new challenge is created after an unsuccessful try. By enabling this option, the same challenge is reused for the next try.
+				</div>
+			</div>
+		</div>
 	</div>
 	<div class="nedCAPTCHA-setup-sidebar">
 		<!-- Math Problem -->
 		<div class="nedCAPTCHA-setup-math">
-			<div class="nedCAPTCHA-setup-title">Math Problem Options</div>
+		<div class="nedCAPTCHA-setup-title">Math Problem Options</div>
 			<ul class="nedCAPTCHA-setup-section">
 				<li class="nedCAPTCHA-setup-setting">
 					<div id="nedCAPTCHA-complexity">
@@ -52,13 +79,13 @@ $m = $module;
 					</div>
 					<div class="d-flex gap-2">
 						<div class="form-check">
-							<input class="form-check-input" type="radio" name="complexity" id="complexity1" value="math">
+							<input class="form-check-input" type="radio" name="complexity" id="complexity1" value="simple" <?=$defaults["complexity"] == "simple" ? "checked" : ""?>>
 							<label class="form-check-label" for="complexity1">
 								Simple
 							</label>
 						</div>
 						<div class="form-check">
-							<input class="form-check-input" type="radio" name="complexity" id="complexity2" value="image">
+							<input class="form-check-input" type="radio" name="complexity" id="complexity2" value="complex" <?=$defaults["complexity"] == "complex" ? "checked" : ""?>>
 							<label class="form-check-label" for="complexity2">
 								Complex
 							</label>
@@ -67,23 +94,21 @@ $m = $module;
 
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
-					<div id="nedCAPTCHA-sizeVariation">
-						Size Variation
-						<div class="nedCAPTCHA-setup-description">The amount of random scaling applied to individual characters.</div>
+					Min/Max Operand Values
+					<div class="nedCAPTCHA-setup-description">By default, the range of operand values is 1 to 10. For complex problems, it might be useful to set higher limits for min and max operand values to reduce the likelihood of negative results when subtractions are involved or to eliminate the possibility of a trivial multiplication by 1.</div>
+					<div class="d-flex gap-2 align-items-center">
+						<label for="nedCAPTCHA-minValue" class="form-text mb-0 mt-0">Min</label>
+						<input id="nedCAPTCHA-minValue" type="number" name="minValue" class="form-control form-control-sm" value="<?= $defaults["minValue"] ?? 1 ?>" min="1">
+						<label for="nedCAPTCHA-maxValue" class="form-text mb-0 mt-0">Max</label>
+						<input id="nedCAPTCHA-maxValue" type="number" name="maxValue" class="form-control form-control-sm" value="<?= $defaults["maxValue"] ?? 10 ?>" min="1">
 					</div>
-					<select name="sizeVariation" class="form-select form-select-sm" aria-labelledby="nedCAPTCHA-sizeVariation">
-						<option value="0">None</option>
-						<option value="1">Slight, up to ±10%</option>
-						<option value="2">Medium, up to ±20%</option>
-						<option value="3">Strong, up to ±30%</option>
-					</select>
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
 					<div id="nedCAPTCHA-bgColor-math">
 						Background Color
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-bgColor-math" type="color" name="bgColor" class="form-control form-control-sm form-control-color text-output" value="#000000">
+						<input aria-labelledby="nedCAPTCHA-bgColor-math" type="color" name="bgColor" class="form-control form-control-sm form-control-color text-output" value="<?=$defaults["bgColor"]->getHex()?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
@@ -92,13 +117,13 @@ $m = $module;
 						Text Color
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-textColor-math" type="color" name="textColor" class="form-control form-control-sm form-control-color text-output" value="#000000">
+						<input aria-labelledby="nedCAPTCHA-textColor-math" type="color" name="textColor" class="form-control form-control-sm form-control-color text-output" value="<?=$defaults["textColor"]->getHex()?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
 					Preview<br>
-					<svg id="nedCAPTCHA-preview-math" class="nedCAPTCHA-preview" width="150" height="50" xmlns="http://www.w3.org/2000/svg">
+					<svg id="nedCAPTCHA-preview-math" class="nedCAPTCHA-preview" width="100" height="30" xmlns="http://www.w3.org/2000/svg">
 						<style>
 							:root {
 								--bgColor: #92d050;
@@ -109,48 +134,49 @@ $m = $module;
 							}
 							text.math {
 								fill: var(--textColor);
-								font-size: 25px;
+								font-size: 16px;
 								font-family: sans-serif;
 								dominant-baseline: middle;
 								text-anchor: middle;
 							}
 						</style>
 						<!-- Background rectangle -->
-						<rect x="0" y="0" width="150" height="50" />
+						<rect x="0" y="0" width="100" height="30" />
 						<!-- Centered Text -->
-						<text class="math" x="75" y="27">(8 + 2) * 3</text>
+						<text class="math" x="50" y="17">(8 + 2) * 3</text>
 					</svg>
 				</li>
 			</ul>
 			<div class="form-check mt-2">
-				<input class="form-check-input" type="checkbox" id="nedCAPTCHA-caseInsensitive">
-				<label class="form-check-label mb-1" for="nedCAPTCHA-caseInsensitive">
+				<input class="form-check-input" type="checkbox" name="showAsText" id="nedCAPTCHA-showAsText" <?=$defaults["showAsText"] ? "checked" : ""?>>
+				<label class="form-check-label mb-1" for="nedCAPTCHA-showAsText">
 					Show as text (instead of rendering an image)
 				</label>
 				<div class="nedCAPTCHA-setup-description">
 					By default, math problems are rendered as images to make it harder for bots to beat the CAPTCHA. With this option, the math problem will be rendered as text. This may be useful in order to support persons relying on screen readers to be able to complete the CAPTCHA.
 				</div>
 			</div>
-
 		</div>
 		<!-- Custom -->
-		<div class="nedCAPTCHA-setup-custom" style="display: none;">
-			<div class="nedCAPTCHA-setup-title">Custom Options</div>
-			<div class="nedCAPTCHA-setup-description">
-				Enter pairs of challenges (displayed to the survey respondent) and responses (the expected answers), separated by the equal signs (=), one pair per line. For the CAPTCHA, a random pair will be chosen.
-			</div>
-			<div class="mt-2">
-				<textarea id="nedCAPTCHA-custom" class="form-control form-control-sm" placeholder="Challenge = Response" rows="15"></textarea>
-			</div>
-			<div class="form-check mt-2">
-				<input class="form-check-input" type="checkbox" id="nedCAPTCHA-caseInsensitive">
-				<label class="form-check-label" for="nedCAPTCHA-caseInsensitive">
-					Responses are case-insensitve
-				</label>
+		<div class="nedCAPTCHA-setup-custom">
+			<div class="nedCAPTCHA-setup-title">Custom Challenge/Response Options</div>
+			<div class="nedCAPTCHA-setup-group">
+				<div class="nedCAPTCHA-setup-description">
+					Enter pairs of challenges (displayed to the survey respondent) and responses (the expected answers), separated by the equal signs (=), one pair per line. For the CAPTCHA, a random pair will be chosen.
+				</div>
+				<div class="mt-2">
+					<textarea id="nedCAPTCHA-custom" name="custom" class="form-control form-control-sm" placeholder="Challenge = Response" rows="20"><?=$custom_pairs?></textarea>
+				</div>
+				<div class="form-check mt-2">
+					<input class="form-check-input" type="checkbox" name="caseInsensitive" id="nedCAPTCHA-caseInsensitive" <?=$defaults["caseInsensitive"] ? "checked" : ""?>>
+					<label class="form-check-label" for="nedCAPTCHA-caseInsensitive">
+						Use case-insensitve comparison for responses
+					</label>
+				</div>
 			</div>
 		</div>
 		<!-- Distorted Image -->
-		<div class="nedCAPTCHA-setup-image" style="display: none;">
+		<div class="nedCAPTCHA-setup-image">
 			<div class="nedCAPTCHA-setup-title">Distorted Image Options</div>
 			<ul class="nedCAPTCHA-setup-section">
 				<li class="nedCAPTCHA-setup-setting">
@@ -159,7 +185,7 @@ $m = $module;
 						<div class="nedCAPTCHA-setup-description">The number of characters shown (3 to 10).</div>
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-length" type="range" class="form-range text-output" min="3" max="10">
+						<input aria-labelledby="nedCAPTCHA-length" name="length" type="range" class="form-range text-output" min="3" max="10" value="<?=$defaults["length"]?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
@@ -169,10 +195,10 @@ $m = $module;
 						<div class="nedCAPTCHA-setup-description">The amount of random rotation applied to individual characters.</div>
 					</div>
 					<select name="angleVariation" class="form-select form-select-sm" aria-labelledby="nedCAPTCHA-angleVariation">
-						<option value="0">None</option>
-						<option value="1">Slight, up to ±7°</option>
-						<option value="2">Medium, up to ±11°</option>
-						<option value="3">Strong, up to ±15°</option>
+						<option value="none" <?=$defaults["angleVariation"] == "none" ? "selected" : ""?>>None</option>
+						<option value="slight" <?=$defaults["angleVariation"] == "slight" ? "selected" : ""?>>Slight, up to ±7°</option>
+						<option value="medium" <?=$defaults["angleVariation"] == "medium" ? "selected" : ""?>>Medium, up to ±11°</option>
+						<option value="strong" <?=$defaults["angleVariation"] == "strong" ? "selected" : ""?>>Strong, up to ±15°</option>
 					</select>
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
@@ -181,10 +207,10 @@ $m = $module;
 						<div class="nedCAPTCHA-setup-description">The amount of random scaling applied to individual characters.</div>
 					</div>
 					<select name="sizeVariation" class="form-select form-select-sm" aria-labelledby="nedCAPTCHA-sizeVariation">
-						<option value="0">None</option>
-						<option value="1">Slight, up to ±10%</option>
-						<option value="2">Medium, up to ±20%</option>
-						<option value="3">Strong, up to ±30%</option>
+						<option value="none" <?=$defaults["sizeVariation"] == "none" ? "selected" : ""?>>None</option>
+						<option value="slight" <?=$defaults["sizeVariation"] == "slight" ? "selected" : ""?>>Slight, up to ±10%</option>
+						<option value="medium" <?=$defaults["sizeVariation"] == "medium" ? "selected" : ""?>>Medium, up to ±20%</option>
+						<option value="strong" <?=$defaults["sizeVariation"] == "strong" ? "selected" : ""?>>Strong, up to ±30%</option>
 					</select>
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
@@ -193,10 +219,10 @@ $m = $module;
 						<div class="nedCAPTCHA-setup-description">The amount of noise that is added to the image.</div>
 					</div>
 					<select name="noiseDensity" class="form-select form-select-sm" aria-labelledby="nedCAPTCHA-noiseDensity">
-						<option value="0">Off (no noise)</option>
-						<option value="1">Low (60% of the default amount)</option>
-						<option value="2">Medium (the default amount)</option>
-						<option value="3">High (150% of the default amount)</option>
+						<option value="off" <?=$defaults["noiseDensity"] == "off" ? "selected" : ""?>>Off (no noise)</option>
+						<option value="low" <?=$defaults["noiseDensity"] == "low" ? "selected" : ""?>>Low (60% of the default amount)</option>
+						<option value="medium" <?=$defaults["noiseDensity"] == "medium" ? "selected" : ""?>>Medium (the default amount)</option>
+						<option value="high" <?=$defaults["noiseDensity"] == "high" ? "selected" : ""?>>High (150% of the default amount)</option>
 					</select>
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
@@ -204,7 +230,7 @@ $m = $module;
 						Background Color
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-bgColor-image" type="color" name="bgColor" class="form-control form-control-sm form-control-color text-output" value="#000000">
+						<input aria-labelledby="nedCAPTCHA-bgColor-image" type="color" name="bgColor" class="form-control form-control-sm form-control-color text-output" value="<?=$defaults["bgColor"]->getHex()?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
@@ -213,7 +239,7 @@ $m = $module;
 						Noise Color
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-noiseColor-image" type="color" name="noiseColor" class="form-control form-control-sm form-control-color text-output" value="#660000">
+						<input aria-labelledby="nedCAPTCHA-noiseColor-image" type="color" name="noiseColor" class="form-control form-control-sm form-control-color text-output" value="<?=$defaults["noiseColor"]->getHex()?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
@@ -222,7 +248,7 @@ $m = $module;
 						Text Color
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-textColor-image" type="color" name="textColor" class="form-control form-control-sm form-control-color text-output" value="#000000">
+						<input aria-labelledby="nedCAPTCHA-textColor-image" type="color" name="textColor" class="form-control form-control-sm form-control-color text-output" value="<?=$defaults["textColor"]->getHex()?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
@@ -280,19 +306,24 @@ $m = $module;
 			</ul>
 		</div>
 	</div>
-	<script type="text/javascript">
-		// Outputs
-		$('.nedCAPTCHA-setup-container input.text-output')
-			.on('input', function() {
-				$(this).next('output').text(this.value);
-			}).trigger('input');
-		// Update preview
-		const $previewImage = $('svg.nedCAPTCHA-preview');
-		$('.nedCAPTCHA-setup-container input.form-control-color').on('input change', function() {
-			const name = $(this).attr('name');
-			const varname = '--' + name;
-			$previewImage.css(varname, $(this).val());
-		}).trigger('change');
-		
-	</script>
 </div>
+<?php if (!$is_plugin) return; ?>
+<script type="text/javascript">
+	// Outputs
+	$('.nedCAPTCHA-setup-container input.text-output')
+		.on('input', function() {
+			$(this).next('output').text(this.value);
+		}).trigger('input');
+	// Update preview
+	$('.nedCAPTCHA-setup-container input.form-control-color').on('input change', function() {
+		const name = $(this).attr('name');
+		const varname = '--' + name;
+		$('svg.nedCAPTCHA-preview').css(varname, $(this).val());
+	}).trigger('change');
+</script>
+<style>
+	.nedCAPTCHA-setup-container {
+		border: 1px dotted #ccc;
+		max-width: 800px;
+	}
+</style>

@@ -37,11 +37,32 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$psh = $this->framework->getPublicSurveyHash($project_id);
 		$sh = $_GET["s"] ?? "";
 
+		$post = $_POST;
+		$get = $_GET;
+
+		if (!empty($_POST) && !(isset($_POST['__nedcaptcha2__ck__']) || isset($_POST["__page__"]))) {
+			if (isset($_POST["__page__"])) {
+				// Verify page hash
+				if (\Survey::verifyPageNumHash($_POST['__page_hash__'], $_POST['__page__'])) {
+					return;
+				}
+			}
+			else {
+				return;
+			}
+		}
+
 		// Stop here if there is no survey hash (includes, e.g., the close window page)
 		if ($sh == "") return;
 
-		// Do not interfere with returning
+		// Do not interfere with returning or passthru requests
 		if ($_SERVER['REQUEST_METHOD'] == 'GET' && $_GET["__return"] == "1") return;
+		if (isset($_GET["__passthru"])) return;
+		if (isset($_GET["__endpublicsurvey"])) {
+			// Validate response hash
+			$response_id = \Survey::decryptResponseHash($_GET['__rh'], $GLOBALS['participant_id']);
+			if ($response_id != "") return;
+		} 
 		$returning = $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST["__code"]);
 
 		// Do not interfere when submitting first page of a survey
@@ -309,9 +330,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	function redcap_module_ajax($action, $payload, $project_id, $record, $instrument, $event_id, $repeat_instance, $survey_hash, $response_id, $survey_queue_hash, $page, $page_full, $user_id, $group_id) {
 
+		#region get-params
 		if ($action == "get-params") {
-			$Proj = new \Project($project_id);
-			$metadata = $Proj->getMetadata();
 			$field = $payload["field"];
 
 			require_once "classes/ActionTagHelper.php";
@@ -324,14 +344,67 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$defaults = $this->validate_params($tagged[$field]["params"], true);
 			unset($defaults["debug"]);
 
+			// Generate HTML by capturing the output from including setup-ui.php
+			ob_start();
+			require_once "setup-ui.php";
+			$html = ob_get_contents();
+			ob_end_clean();
+
 			return [
 				"params" => $params,
 				"defaults" => $defaults,
+				"html" => $html,
+				"warnings" => $this->warnings,
+				"errors" => $this->errors,
 			];
 		}
-		
+		#endregion
+		#region set-params
+		if ($action == "set-params") {
+			$field = $payload["field"];
+			// Validate
+			require_once "classes/ActionTagHelper.php";
+			$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], $field, null, null, true)[self::AT_SETUP] ?? [];
+			if (count($tagged) == 0) return [
+				"errors" => ["Invalid request."],
+			];
+			// Get defaults and reset warnings
+			$defaults = $this->validate_params(["type" => "math"], true);
+			$this->warnings = [];
+			$params = $this->validate_params($payload["params"], false);
+			unset($params["debug"]);
+			// Minimize data
+			foreach ($params as $key => $value) {
+				if ($key == "type") continue;
+				if ((string)$value == (string)$defaults[$key]) unset($params[$key]);
+			}
+			// Get current annotations
+			$Proj = new \Project($project_id);
+			$misc_current = $Proj->getMetadata()[$field]["misc"];
+			// Replace
+			$pattern = '/^' . preg_quote(self::AT_SETUP, '/') . '\s*=\s*' . preg_quote($tagged[$field]["params"], '/') . '/m';
+			$replacement = self::AT_SETUP."=".json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+			$misc_new = preg_replace($pattern, $replacement, $misc_current);
+			// Store
+			$table_name = $Proj->isDraftMode() ? "redcap_metadata_draft" : "redcap_metadata";
+			$sql = "UPDATE $table_name SET misc = ? WHERE field_name = ? AND project_id = ?";
+			$q = db_query($sql, [$misc_new, $field, $project_id]);
+			if ($q) {
+				$response = [];
+				if (count($this->warnings) > 0) $response["warnings"] = $this->warnings;
+				return $response;
+			}
+			else {
+				return [
+					"errors" => ["Failed to update metadata."],
+				];
+			}
+		}
+		#endregion
 
-		return "Not implemented yet: $action";
+		return [
+			"errors" => ["Invalid action."]
+		];
 	}
 
 	#endregion
@@ -355,9 +428,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	 * @param bool $set_defaults 
 	 * @return array 
 	 */
-	private function validate_params($params, $set_defaults = false) {
-		if ($params == "") $params = "{}";
-		$params = json_decode($params, true);
+	public function validate_params($params, $set_defaults = false) {
+		if (!is_array($params)) {
+			if ($params == "") $params = "{}";
+			$params = json_decode($params, true);
+		}
 		if (!is_array($params)) {
 			$this->errors[] = "Error parsing NEDCaptcha 2 parameters! CAPTCHA is disabled.";
 			$params = [ "type" => "none" ];
@@ -365,8 +440,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$full = [
 			"debug" => $this->getProjectSetting("debug") == true,
 		];
-		// angleVariation (0-3, default 2)
-		$full["angleVariation"] = max(0, min(3, intval($params["angleVariation"] ?? 2)));
+		// angleVariation (none/slight/medium/strong, default medium)
+		$full["angleVariation"] = $params["angleVariation"] ?? "medium";
+		if (!in_array($full["angleVariation"], ["none", "slight", "medium", "strong"], true)) {
+			$this->warnings[] = "Invalid 'angleVariation' parameter, defaulting to 'medium'.";
+			$full["angleVariation"] = "medium";
+		}
 		// bgColor
 		$full["bgColor"] = Color::Parse($params["bgColor"] ?? "#f3f3f3");
 		// capture (boolean, default false)
@@ -408,12 +487,20 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$full["minValue"] = max(1, intval($params["minValue"] ?? 1));
 		// noiseColor
 		$full["noiseColor"] = Color::Parse($params["noiseColor"] ?? "#333333");
-		// noiseDensity (0-3, default 2)
-		$full["noiseDensity"] = max(0, min(3, intval($params["noiseDensity"] ?? 2)));
+		// noiseDensity (off/low/medium/high, default medium)
+		$full["noiseDensity"] = $params["noiseDensity"] ?? "medium";
+		if (!in_array($full["noiseDensity"], ["off", "low", "medium", "high"], true)) {
+			$this->warnings[] = "Invalid 'noiseDensity' parameter, defaulting to 'medium'.";
+			$full["noiseDensity"] = "medium";
+		}
 		// reuse (boolean, default false)
 		$full["reuse"] = isset($params["reuse"]) ? $params["reuse"] === true : false;
-		// sizeVariation (0-3, default 2)
-		$full["sizeVariation"] = max(0, min(3, intval($params["sizeVariation"] ?? 1)));
+		// sizeVariation (none/slight/medium/strong, default medium)
+		$full["sizeVariation"] = $params["sizeVariation"] ?? "medium";
+		if (!in_array($full["sizeVariation"], ["none", "slight", "medium", "strong"], true)) {
+			$this->warnings[] = "Invalid 'sizeVariation' parameter, defaulting to 'medium'.";
+			$full["sizeVariation"] = "medium";
+		}
 		// textColor
 		$full["textColor"] = Color::Parse($params["textColor"] ?? "#800000");
 		// type (none/math/image/custom, default math)
@@ -445,9 +532,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	}
 
 	private function inject_online_designer($project_id, $instrument) {
-		/** @var Project */
-		$Proj = $GLOBALS['Proj'];
-
 		// Check for action tags
 		require_once "classes/ActionTagHelper.php";
 		$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], null, [$instrument], null, true)[self::AT_SETUP] ?? [];
@@ -466,6 +550,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			"tagged" => array_keys($tagged),
 			"at" => self::AT_SETUP,
 			"linkTitle" => "Edit CAPTCHA settings",
+			"updateLabel" => "Update"
 		];
 		print \RCView::script("DE_ELISABETHGRUPPE_nedCAPTCHA2.init(".
 			json_encode($config).", $jsmo);");

@@ -22,10 +22,8 @@
 	display: flex;
 	flex-basis: 1;
 	width: 100%;
-	max-width: 600px;
-	margin: 0 10px;
+	height: 560px;
 	padding: 5px;
-	border: 1px dotted blue;
 }
 .nedCAPTCHA-setup-main {
 	width: 50%;
@@ -63,12 +61,19 @@
 	margin-top: .25em;
 }
 .nedCAPTCHA-setup-setting .form-control-color {
-	width: 100px;
+	width: 108px;
 	font-size: 90%;
 }
 .nedCAPTCHA-preview {
 	outline: 1px dotted black;
 	outline-offset: 2px;
 	margin: 3px;
-
+}
+.nedCAPTCHA-setup-math, .nedCAPTCHA-setup-image, .nedCAPTCHA-setup-custom {
+	display: none;
+}
+.nedCAPTCHA-setup-container:has(input#type-math:checked) .nedCAPTCHA-setup-math,
+.nedCAPTCHA-setup-container:has(input#type-image:checked) .nedCAPTCHA-setup-image,
+.nedCAPTCHA-setup-container:has(input#type-custom:checked) .nedCAPTCHA-setup-custom {
+	display: block;
 }
