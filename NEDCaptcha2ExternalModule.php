@@ -37,9 +37,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$psh = $this->framework->getPublicSurveyHash($project_id);
 		$sh = $_GET["s"] ?? "";
 
-		$post = $_POST;
-		$get = $_GET;
+		// $post = $_POST;
+		// $get = $_GET;
 
+		// Perform various checks in order to determine if anything should be done
+		// (i.e., act only on the first page of a public survey)
 		if (!empty($_POST) && !(isset($_POST['__nedcaptcha2__ck__']) || isset($_POST["__page__"]))) {
 			if (isset($_POST["__page__"])) {
 				// Verify page hash
@@ -51,10 +53,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 				return;
 			}
 		}
-
+		// Additional checks, just to be safe (some may be redundant to the code above)
 		// Stop here if there is no survey hash (includes, e.g., the close window page)
 		if ($sh == "") return;
-
 		// Do not interfere with returning or passthru requests
 		if ($_SERVER['REQUEST_METHOD'] == 'GET' && $_GET["__return"] == "1") return;
 		if (isset($_GET["__passthru"])) return;
@@ -64,7 +65,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			if ($response_id != "") return;
 		} 
 		$returning = $_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST["__code"]);
-
 		// Do not interfere when submitting first page of a survey
 		if ($sh == $psh && isset($_POST["__start_time__"])) return;
 
@@ -75,7 +75,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$result = $this->queryLogs("SELECT expected, passed WHERE message = ?", $store_key);
 		$stored = $result->fetch_assoc() ?? [ "expected" => null, "passed" => false ];
 
-				/** @var \Project */
+		/** @var \Project */
 		$Proj = $GLOBALS["Proj"];
 		// Obtain survey info
 		$context = \Survey::getSurveyContextFromSurveyHash($sh);
@@ -128,10 +128,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 			return;
 		}
-
-		// Validate and/or generate the CAPTCHA
 		$this->active = true;
 
+		// Validate and/or generate the CAPTCHA
 		// Get response
 		$response = isset($_POST[$captcha_field]) ? trim("{$_POST[$captcha_field]}") : "";
 		$expected = $stored["expected"];
