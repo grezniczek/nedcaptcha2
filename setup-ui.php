@@ -6,12 +6,12 @@ if ($is_plugin) {
 	$ih = InjectionHelper::init($module);
 	$ih->css("css/nedCAPTCHA2.css");
 	$defaults = $module->validate_params("{}", true);
+	$custom_pairs = "";
+	foreach ($defaults["custom"] ?? [] as $pair) {
+		$custom_pairs .= $pair["challenge"] . "=" . $pair["response"] . "\n";
+	}
 }
 
-$custom_pairs = "";
-foreach ($defaults["custom"] ?? [] as $pair) {
-	$custom_pairs .= $pair["challenge"] . "=" . $pair["response"] . "\n";
-}
 
 ?>
 <div class="nedCAPTCHA-setup-container">
@@ -52,17 +52,6 @@ foreach ($defaults["custom"] ?? [] as $pair) {
 				</label>
 				<div class="nedCAPTCHA-setup-description">
 					By default, responses are not captured. With this option, responses are captured into the field with the <code>@NEDCAPTCHA</code> action tag.
-				</div>
-			</div>
-		</div>
-		<div class="nedCAPTCHA-setup-group">
-			<div class="form-check mt-2">
-				<input class="form-check-input" type="checkbox" name="reuse" id="nedCAPTCHA-reuse" <?=$defaults["reuse"] ? "checked" : ""?>>
-				<label class="form-check-label mb-1" for="nedCAPTCHA-reuse">
-					Re-use challenge
-				</label>
-				<div class="nedCAPTCHA-setup-description">
-					By default, a new challenge is created after an unsuccessful try. By enabling this option, the same challenge is reused for the next try.
 				</div>
 			</div>
 		</div>
@@ -188,6 +177,13 @@ foreach ($defaults["custom"] ?? [] as $pair) {
 						<input aria-labelledby="nedCAPTCHA-length" name="length" type="range" class="form-range text-output" min="3" max="10" value="<?=$defaults["length"]?>">
 						<output aria-hidden="true"></output>
 					</div>
+				</li>
+				<li class="nedCAPTCHA-setup-setting">
+					<div class="form-check">
+						<input class="form-check-input" type="checkbox" name="reuse" id="nedCAPTCHA-reuse" <?=$defaults["reuse"] ? "checked" : ""?>>
+						<label class="form-check-label mb-0" for="nedCAPTCHA-reuse">Re-use challenge</label>
+					</div>
+					<div class="nedCAPTCHA-setup-description">By default, a new challenge is created after an unsuccessful try. By enabling this option, the same challenge is reused for the next try.</div>
 				</li>
 				<li class="nedCAPTCHA-setup-setting">
 					<div id="nedCAPTCHA-angleVariation">

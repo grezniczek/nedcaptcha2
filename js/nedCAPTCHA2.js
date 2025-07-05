@@ -23,6 +23,8 @@ let editing = false;
 
 const hooks = {};
 
+const toasts = [];
+
 //#endregion
 
 /**
@@ -99,6 +101,7 @@ function edit(field) {
 		let dirty = false;
 		const close = function() {
 			editing = false;
+			toasts.forEach(t => $('#'+t).remove());
 			$('#nedCAPTCHA-OD-editor').dialog('close');
 		};
 		// Show dialog
@@ -120,22 +123,27 @@ function edit(field) {
 							config.JSMO.ajax('set-params', { 'field': field, 'params': data.params })
 							.then(function(response) {
 								log('Update result:', response);
-								if (response.errors) {
-									response.errors.push('Please try again after reloading the page.');
+								if (response.errors.length) {
+									const errors = '<ul>' + response.errors.map(err => '<li>' + err + '</li>').join('') + '</ul><i>Please try again after reloading the page.</i>';
 									// @ts-ignore base.js
-									showToast("nedCAPTCHA ERROR", response.errors.join('<br>'), "error");
+									toasts.push(showToast("nedCAPTCHA ERROR", errors, "error"));
 									return;
 								}
-								if (response.warnings) {
+								if (response.warnings.length) {
+									const warnings = '<ul>' + response.warnings.map(w => '<li>' + w + '</li>').join('') + '</ul><i>Please fix the issues and try again.</i>';
 									// @ts-ignore base.js
-									showToast("nedCAPTCHA WARNING", response.warnings.join('<br>'), "warn");
+									toasts.push(showToast("nedCAPTCHA WARNING", warnings, "error"));
 									return;
 								}
-								else {
-									// @ts-ignore base.js
-									showToast("SUCCESS", "nedCAPTCHA configuration has been updated", "success", 1000);
-								}
+								// Success
+								// @ts-ignore base.js
+								showToast("SUCCESS", "nedCAPTCHA configuration has been updated", "success", 1000);
 								close();
+							})
+							.catch(function(err) {
+								log(err);
+								// @ts-ignore base.js
+								showToast("nedCAPTCHA ERROR", 'An unknown error occured.', "error");
 							});
 						}
 						else {
@@ -149,7 +157,7 @@ function edit(field) {
 					const $el = $(e.target);
 					const name = $el.attr('name') ?? '?';
 					const val = $el.is(':checkbox') ? $el.is(':checked') : $el.val();
-					if (Object.keys(data.defaults).includes(name)) {
+					if (data.keys.includes(name)) {
 						data.params[name] = val;
 					} 
 					dirty = true;

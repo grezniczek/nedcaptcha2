@@ -22,14 +22,14 @@
 	display: flex;
 	flex-basis: 1;
 	width: 100%;
-	height: 560px;
+	height: 600px;
 	padding: 5px;
 }
 .nedCAPTCHA-setup-main {
-	width: 50%;
+	width: 40%;
 }
 .nedCAPTCHA-setup-sidebar {
-	max-width: 50%;
+	max-width: 60%;
 }
 .nedCAPTCHA-setup-title {
 	font-weight: bold;
@@ -76,4 +76,7 @@
 .nedCAPTCHA-setup-container:has(input#type-image:checked) .nedCAPTCHA-setup-image,
 .nedCAPTCHA-setup-container:has(input#type-custom:checked) .nedCAPTCHA-setup-custom {
 	display: block;
+}
+.nedCAPTCHA-setup-setting .form-check {
+	min-height: unset;
 }

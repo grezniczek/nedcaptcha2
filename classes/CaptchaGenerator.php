@@ -154,12 +154,13 @@ class CaptchaGenerator
 
 	private function asImage($challenge, $settings, $height = 50) 
 	{
-		$nChars = strlen($challenge);
+		$challenge = trim(str_replace(" ", "", $challenge));
+		$nChars = mb_strlen($challenge);
 		// Calculate the width based on the number of characters.
 		$width = $height / 2 * $nChars;
 
 		// Set the fontsize smaller than the height. 60% is good for the font used.
-		$fontSize = $height * 0.7;
+		$fontSize = $height * 0.6;
 		
 		try {
 			// Create the image.
@@ -255,7 +256,7 @@ class CaptchaGenerator
 			// Fill the background.
 			imagefill($img, 0, 0, $bc);
 			// Draw random dots.
-			for ($i = 0; $i < $width * $height * 0.1 * $settings["noiseDensity"]; $i++) {
+			for ($i = 0; $i < $width * $height * 0.1 * $densities[$settings["noiseDensity"]]; $i++) {
 				imagefilledellipse($img, mt_rand(0, $width), mt_rand(0, $height), 1, 1, $nc);
 			}
 			// Create a textbox.

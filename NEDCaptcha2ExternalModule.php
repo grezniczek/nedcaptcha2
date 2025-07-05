@@ -342,6 +342,15 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			unset($params["debug"]);
 			$defaults = $this->validate_params($tagged[$field]["params"], true);
 			unset($defaults["debug"]);
+			$valid_keys = array_keys($defaults);
+			// Convert custom to string
+			$custom_pairs = "";
+			foreach ($defaults["custom"] ?? [] as $pair) {
+				$custom_pairs .= $pair["challenge"] . "=" . $pair["response"] . "\n";
+			}
+			$params["custom"] = $defaults["custom"] = $custom_pairs;
+
+
 
 			// Generate HTML by capturing the output from including setup-ui.php
 			ob_start();
@@ -351,7 +360,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 			return [
 				"params" => $params,
-				"defaults" => $defaults,
+				"keys" => $valid_keys,
 				"html" => $html,
 				"warnings" => $this->warnings,
 				"errors" => $this->errors,
@@ -366,16 +375,54 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], $field, null, null, true)[self::AT_SETUP] ?? [];
 			if (count($tagged) == 0) return [
 				"errors" => ["Invalid request."],
+				"warnings" => [],
 			];
 			// Get defaults and reset warnings
 			$defaults = $this->validate_params(["type" => "math"], true);
 			$this->warnings = [];
+			// Convert custom challenge-response pairs to array
+			if (isset($payload["params"]["custom"])) {
+				$custom_array = [];
+				$custom_string = trim("{$payload["params"]["custom"]}");
+				if ($custom_string != "") {
+					$pairs = explode("\n", $custom_string);
+					$line = 0;
+					foreach ($pairs as $pair) {
+						$line++;
+						if ($pair == "") continue; // skip empty lines
+						$parts = explode("=", $pair, 2);
+						$custom_challenge = trim($parts[0]);
+						$custom_response = trim($parts[1] ?? "");
+						if ($custom_challenge == "" || $custom_response == "") {
+							$this->warnings[] = "Invalid custom challenge-response pair in line $line.";
+						}
+						else {
+							$custom_array[] = [
+								"challenge" => trim($parts[0]),
+								"response" => trim($parts[1]),
+							];
+						}
+					}
+					$payload["params"]["custom"] = $custom_array;
+				}
+			}
 			$params = $this->validate_params($payload["params"], false);
 			unset($params["debug"]);
 			// Minimize data
 			foreach ($params as $key => $value) {
 				if ($key == "type") continue;
-				if ((string)$value == (string)$defaults[$key]) unset($params[$key]);
+				if ($key == "custom") {
+					if (count($value) == 0) unset($params[$key]);
+				}
+				else if ((string)$value == (string)$defaults[$key]) {
+					unset($params[$key]);
+				}
+			}
+			if (count($this->errors) || count($this->warnings)) {
+				return [
+					"warnings" => $this->warnings,
+					"errors" => $this->errors,
+				];
 			}
 			// Get current annotations
 			$Proj = new \Project($project_id);
@@ -389,20 +436,20 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$sql = "UPDATE $table_name SET misc = ? WHERE field_name = ? AND project_id = ?";
 			$q = db_query($sql, [$misc_new, $field, $project_id]);
 			if ($q) {
-				$response = [];
-				if (count($this->warnings) > 0) $response["warnings"] = $this->warnings;
-				return $response;
+				return [ "errors" => [], "warnings" => [] ];
 			}
 			else {
 				return [
 					"errors" => ["Failed to update metadata."],
+					"warnings" => [],
 				];
 			}
 		}
 		#endregion
 
 		return [
-			"errors" => ["Invalid action."]
+			"errors" => ["Invalid action."],
+			"warnings" => [],
 		];
 	}
 
@@ -452,6 +499,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// caseInsensitive (boolean, default false)
 		$full["caseInsensitive"] = isset($params["caseInsensitive"]) ? $params["caseInsensitive"] === true : false;
 		// complexity (simple/complex, default simple)
+		$full["complexity"] = $params["complexity"] ?? "simple";
 		if (!isset($params["complexity"]) || !in_array($params["complexity"], ["simple", "complex"])) {
 			if (isset($params["complexity"])) {
 				$this->warnings[] = "Invalid 'complexity' parameter, defaulting to 'simple'.";
