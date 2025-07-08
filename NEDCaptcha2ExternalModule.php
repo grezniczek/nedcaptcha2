@@ -15,6 +15,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	const AT_FAILMESSAGE = "@NEDCAPTCHA-FAILMESSAGE";
 	const AT_DISPLAY = "@NEDCAPTCHA-DISPLAY";
 
+	const IMAGE_MIN_LENGTH = 3;
+	const IMAGE_MAX_LENGTH = 8;
+	const IMAGE_DEFAULT_LENGTH = 5;
+
 	/** @var int The number of minutes a CAPTCHA is valid for */
 	const CAPTCHA_EXPIRATION = 120; 
 
@@ -405,6 +409,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 					}
 					$payload["params"]["custom"] = $custom_array;
 				}
+				else {
+					unset($payload["params"]["custom"]);
+				}
 			}
 			$params = $this->validate_params($payload["params"], false);
 			unset($params["debug"]);
@@ -527,7 +534,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 		}
 		// length (3-10, default 6)
-		$full["length"] = min(10, max(intval($params["length"] ?? 6), 3));
+		$full["length"] = min(self::IMAGE_MAX_LENGTH, max(intval($params["length"] ?? self::IMAGE_DEFAULT_LENGTH), self::IMAGE_MIN_LENGTH));
 		// maxValue (positive int, default 10)
 		$full["maxValue"] = max(intval($params["maxValue"] ?? 10), 1);
 		// minValue (positive int, default 1)

@@ -171,10 +171,10 @@ if ($is_plugin) {
 				<li class="nedCAPTCHA-setup-setting">
 					<div id="nedCAPTCHA-length">
 						Length
-						<div class="nedCAPTCHA-setup-description">The number of characters shown (3 to 10).</div>
+						<div class="nedCAPTCHA-setup-description">The number of characters shown (<?=NEDCaptcha2ExternalModule::IMAGE_MIN_LENGTH?> to <?=NEDCaptcha2ExternalModule::IMAGE_MAX_LENGTH?>).</div>
 					</div>
 					<div class="nedCAPTCHA-setup-range">
-						<input aria-labelledby="nedCAPTCHA-length" name="length" type="range" class="form-range text-output" min="3" max="10" value="<?=$defaults["length"]?>">
+						<input aria-labelledby="nedCAPTCHA-length" name="length" type="range" class="form-range text-output" min="<?=NEDCaptcha2ExternalModule::IMAGE_MIN_LENGTH?>" max="<?=NEDCaptcha2ExternalModule::IMAGE_MAX_LENGTH?>" value="<?=$defaults["length"]?>">
 						<output aria-hidden="true"></output>
 					</div>
 				</li>
