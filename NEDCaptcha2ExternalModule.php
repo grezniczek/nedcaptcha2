@@ -475,7 +475,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$Proj = new \Project($project_id);
 			$misc_current = $Proj->getMetadata()[$field]["misc"];
 			// Replace
-			$pattern = '/^' . preg_quote(self::AT_SETUP, '/') . '\s*=\s*' . preg_quote($tagged[$field]["params"], '/') . '/m';
+			$pattern = '/^' . preg_quote(self::AT_SETUP, '/') . '\s*=\s*' . preg_quote($tagged[$field][0], '/') . '/m';
 			$replacement = self::AT_SETUP."=".json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 			$misc_new = preg_replace($pattern, $replacement, $misc_current);
 			// Store
