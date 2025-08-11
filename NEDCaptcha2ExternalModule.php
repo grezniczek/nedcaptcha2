@@ -382,9 +382,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 			if (count($tagged) == 0) return "ERROR";
 
-			$params = $this->validate_params($tagged[$field]["params"], false);
+			$params = $this->validate_params($tagged[$field][0], false);
 			unset($params["debug"]);
-			$defaults = $this->validate_params($tagged[$field]["params"], true);
+			$defaults = $this->validate_params($tagged[$field][0], true);
 			unset($defaults["debug"]);
 			$valid_keys = array_keys($defaults);
 			// Convert custom to string
