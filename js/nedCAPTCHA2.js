@@ -69,7 +69,10 @@ function addLink(fieldName) {
 	log('Adding/Updating link for', fieldName);
 	$ats.each(function() {
 		const orig = $(this).html();
-		$(this).html(orig.replace(config.at, '<a class="nedCAPTCHA-OD-link" data-bs-toggle="tooltip" title="'+config.linkTitle+'" href="javascript:' + NS_PREFIX + EM_NAME + '.edit(\'' + fieldName + '\');">' + config.at.replace('@', '<span class="nedCAPTCHA-OD-accent">@</span>') + '</a>'));
+		const regex = new RegExp(
+			config.at.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!-)'
+		);
+		$(this).html(orig.replace(regex, '<a class="nedCAPTCHA-OD-link" data-bs-toggle="tooltip" title="'+config.linkTitle+'" href="javascript:' + NS_PREFIX + EM_NAME + '.edit(\'' + fieldName + '\');">' + config.at.replace('@', '<span class="nedCAPTCHA-OD-accent">@</span>') + '</a>'));
 		$(this).find('a.nedCAPTCHA-OD-link').each(function() {
 			new bootstrap.Tooltip(this, { trigger: 'hover' });
 		});
