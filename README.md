@@ -4,13 +4,15 @@
 
 A REDCap External Module that adds CAPTCHA protection to public surveys without any dependencies on external services (hence the name ned = **n**o **e**xternal **d**ependencies).
 
+This is a new and enhanced version of the [nedCAPTCHA](https://github.com/grezniczek/redcap_nedcaptcha) module. It offers the same CAPTCHA functionality, but integrates with surveys in a totally differnt way that allows much greater customization of the CAPTCHA page presented to survey respondents, including full compatibility with REDCap's Multi-Language Management feature.
+
 ## Purpose
 
 To protect a public survey with a CAPTCHA. While REDCap 8.11.0 and newer provides Google reCAPTCHA as an integrated service, this may not be suitable in all circumstances (e.g. servers with tight IPTABLES firewall or privacy rules, where sharing user IPs with Google is problematic).
 
 ## Effect
 
-When enabled in a project, the module will protect the public survey with a CAPTCHA (either a classic image CAPTCHA with distorted text, a math problem, or a custom challenge). A user will first have to complete the CAPTCHA challenge before being allowed to proceed to the survey. The captcha has to be completed at most once per user session.
+When enabled in a project, the module will protect the public survey with a CAPTCHA (either a classic image CAPTCHA with distorted text, a math problem, or a custom challenge). A user will first have to complete the CAPTCHA challenge before being allowed to proceed to the survey. The CAPTCHA has to be completed at most once per user session.
 
 ![Screenshot](nedcaptcha.png)
 
@@ -32,13 +34,56 @@ The _Custom_ CAPTCHA option could be used to implement simple password protectio
 
 ### System-Level Settings
 
-- **Global - Debug Mode:** When enabled, some debug information will be printed to the Web-browser's console. This setting is global, i.e. debug info will be shown regardless of the debug setting in a project.
+This module does not have any system-level configuration options (except for those built-in to the External Modules Framework).
 
 ### Project-Level Settings
 
 - **Debug Mode:** When enabled, some additional information that may help troubleshooting will be printed to the Web-browser's console.
 
-- **Show error messages in the browser:** When enabled, error messages such as PHP exceptions are shown in the browser at the top of survey pages.
+All other configuration, such as type of CAPTCHA, complexity, etc. is done via the parameters to the `@NEDCAPTCHA` action tag.
+
+## Action Tags
+
+- **`@NEDCAPTCHA`**  
+  To protected a public survey with a CAPTCHA, this action tag must be added to a _Text Box_-type field (without validation) on the first page of the survey instrument. The field's label will be used as the prompt for the CAPTCHA. 
+
+  The CAPTCH will be shown directly above the input box. 
+
+  The type of CAPTCHA, its complexity, and appearance, are configured in the action tag's parameter, which is a JSON object. While this JSON could be edited manually, the recommended way to update it is to use the **nedCAPTCHA Editor** that is available by clicking the action tag's name (`@NEDCAPTCHA`) on the Online Designer's fields view. 
+
+
+
+
+
+
+
+Consider adding the @HIDDEN-FORM and @HIDDEN-PDF action tags to the fields used for the CAPTCHA page to prevent them from being shown on the data entry form or on the PDF.
+
+Note that all action tags, except `@NEDCAPTCHA-DISPLAY` and `@NEDCAPTCHA-CUSTOM-EMBED` (which may even occur multiple times on the same field) must only be used once.
+
+Note that all fields tagged with one of the `@NEDCAPTCHA` action tags will be excluded from normal survey operation (i.e., after the survey respondent has passed the CAPTCHA).
+
+
+## Additional Styling
+
+Should the need arise for customized styling that goes beyond what is possible in a standard REDCap field label using the Rich Text Editor, custom CSS can be added to the survey page.
+
+**nedCAPTCHA2** wraps the elements it injects into `DIV` elements with either an `id` attribute or a specific CSS `class`:
+
+- **Instructions** (the label of a field tagged with the `@NEDCAPTCHA-INSTRUCTIONS` action tag) are wrapped in a `DIV` with `id="nedcaptcha2-instructions"`. Thus, use this CSS selector:
+  ```css
+  #nedcaptcha2-instructions {
+    /* add styling */
+  }
+  ```
+
+- **Challenges** (appearing directly above the input box for the response) are wrapped in a `DIV` with `class="nedcaptach2-challenge"`. Thus, use this CSS selector:
+  ```css
+  .nedcaptcha2-challenge {
+    /* add styling */
+  }
+  ```
+
 
 - **Always require the CAPTCHA to be answere:** When checked, the CAPTCHA will be presented on each (repeat) survey, even when the request originates from the same browser.
 
