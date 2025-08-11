@@ -74,12 +74,8 @@ class ActionTagHelper
                 if (!isset($action_tags[$action_tag])) $action_tags[$action_tag] = array();
 
                 // Merge action_tag into action_tags
-                $action_tags[$action_tag] = array_merge( $action_tags[$action_tag],
-                    array($field_name => array(
-                        'params' => isset($tag['params']) ? $tag['params'] : ""
-                    )
-                    )
-                );
+                $action_tags[$action_tag][$field_name][] = 
+                    isset($tag['params']) ? $tag['params'] : "";
             }
         }
 

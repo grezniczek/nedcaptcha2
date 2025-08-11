@@ -30,6 +30,10 @@
         {
             "tag": "@NEDCAPTCHA-CUSTOM-CHALLENGE",
             "description": "Only for CAPTCHAs of type <i>Custom</i>, apply to a text box field (without validation) on the first survey page. This field will be filled with the CAPTCHA challenge. This may be useful to implement your own custom CAPTCHA images that are shown in descriptive fields with branching logic based on the value of the random challenge. Consider adding the <code>@HIDDEN</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown."
+        },
+        {
+            "tag": "@NEDCAPTCHA-CUSTOM-EMBED",
+            "description": "Only for CAPTCHAs of type <i>Custom</i>, apply to any field on the first survey page. This action tag takes a single string parameter that must correspond to a custom challenge value. When the matching challenge is displayed, this field will be embedded in place of the custom challenge. Non-matching challenges will be excluded from the page. Never combine this action tag with any of the other nedCAPTCHA action tags on the same field. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown."
         }
     ],
     "crons": [

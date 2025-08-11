@@ -15,6 +15,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	const AT_FAILMESSAGE = "@NEDCAPTCHA-FAILMESSAGE";
 	const AT_DISPLAY = "@NEDCAPTCHA-DISPLAY";
 	const AT_CUSTOMCHALLENGE = "@NEDCAPTCHA-CUSTOM-CHALLENGE";
+	const AT_CUSTOMEMBED = "@NEDCAPTCHA-CUSTOM-EMBED";
 
 	const IMAGE_MIN_LENGTH = 3;
 	const IMAGE_MAX_LENGTH = 8;
@@ -100,6 +101,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			self::AT_FAILMESSAGE,
 			self::AT_DISPLAY,
 			self::AT_CUSTOMCHALLENGE,
+			self::AT_CUSTOMEMBED,
 		], $page_fields[1], null, $context) ?? [];
 		$this->nedcaptcha_fields = array_filter([
 			array_keys($tagged[self::AT_SETUP] ?? [""])[0], 
@@ -107,11 +109,13 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			array_keys($tagged[self::AT_FAILMESSAGE] ?? [""])[0],
 			...array_keys($tagged[self::AT_DISPLAY] ?? [""]),
 			array_keys($tagged[self::AT_CUSTOMCHALLENGE] ?? [""])[0],
+			// AT_CUSTOMEMBED will be considered later
 		], function($v) { return !empty($v); });
 
 		if ($returning || $stored["passed"] || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
 			// We are outside any context where the CAPTCHA should be shown
 			// Remove the fields
+			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
 			foreach ($this->nedcaptcha_fields as $field) {
 				unset($Proj->metadata[$field]);
 				unset($Proj->forms[$instrument]['fields'][$field]);
@@ -122,13 +126,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		// Validate parameters
 		$captcha_field = array_keys($tagged[self::AT_SETUP])[0];
-		$params = $this->validate_params($tagged[self::AT_SETUP][$captcha_field]["params"], true);
+		$params = $this->validate_params($tagged[self::AT_SETUP][$captcha_field][0], true);
 		// Some debug logging
 		if ($params["debug"]) {
 			$this->scripts_top[] = "console.log('nedCAPTCHA 2: Parameters:',".json_encode(array_merge($params, ["custom" => "[REDCATED]"])).");";
 		}
 		if ($params["type"] == "none") {
 			$this->scripts_top[] = "console.log('nedCAPTCHA 2: No CAPTCHA required.');";
+			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
 			foreach ($this->nedcaptcha_fields as $field) {
 				unset($Proj->metadata[$field]);
 				unset($Proj->forms[$instrument]['fields'][$field]);
@@ -167,6 +172,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		if ($passed) {
 			// CAPTCHA was solved
+			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
 			foreach ($this->nedcaptcha_fields as $field) {
 				unset($Proj->metadata[$field]);
 				unset($Proj->forms[$instrument]['fields'][$field]);
@@ -204,10 +210,26 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 				.attr('pattern', '[".CaptchaGenerator::IMAGE_CHARS."]*');";
 		}
 		else if ($params["type"] == "custom") {
-			// Apply @NEDCAPTCHA-CUSTOM-CHALLENGE action tag
+			// Apply AT_CUSTOMCHALLENGE action tag
 			foreach ($tagged[self::AT_CUSTOMCHALLENGE] as $this_field => $_) {
 				if (in_array($this_field, $this->nedcaptcha_fields, true)) {
 					$this->scripts_delayed[] = "$('input[name=\"{$this_field}\"]').val(".json_encode($captcha->challenge)."); doBranching('$this_field');";
+				}
+			}
+			// Check for AT_CUSTOMEMBED
+			$embed = [];
+			foreach ($tagged[self::AT_CUSTOMEMBED] ?? [] as $this_field => $these_params) {
+				// Skip fields that are already tagged with other action tags
+				if (in_array($this_field, $this->nedcaptcha_fields, true)) continue;
+				// Check for matching challenge
+				foreach ($these_params as $this_param) {
+					if ($this_param[0] == "'" || $this_param[0] == '"') {
+						$this_param = mb_substr($this_param, 1, mb_strlen($this_param) - 2);
+					}
+					if ($this_param == $captcha->challenge) {
+						$embed[] = $this_field;
+						$this->nedcaptcha_fields[] = $this_field;
+					}
 				}
 			}
 		}
@@ -216,6 +238,13 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			"<div class=\"nedcaptcha2-challenge\" data-target=\"$captcha_field\">{$captcha->challenge}</div>";
 		$this->scripts_regular[] = "$('input[name=\"{$captcha_field}\"]').before($('div.nedcaptcha2-challenge[data-target=\"{$captcha_field}\"]'));";
 
+		// Move any fields to be embedded for custom challanges
+		if ($params["type"] == "custom" && count($embed) > 0) {
+			$this->scripts_regular[] = "$('div.nedcaptcha2-challenge[data-target=\"{$captcha_field}\"]').html('');";
+			foreach ($embed as $this_field) {
+				$this->scripts_regular[] = "$('div.nedcaptcha2-challenge[data-target=\"{$captcha_field}\"]').append($('#$this_field-tr td.labelrc').hide().has('[data-kind=\"field-label\"]').children());";
+			}
+		}
 		$jsmo = $this->framework->getJavascriptModuleObjectName();
 
 		$highlight_input = "$('i.nedcaptcha2-highlight').remove(); $('input[name=\"{$captcha_field}\"]').css({ 'outline': '2px solid red'}).after($('<i class=\"fa-solid fa-exclamation-circle fa-lg ms-2 text-danger nedcaptcha2-highlight\"></i>')).get(0).focus();";
