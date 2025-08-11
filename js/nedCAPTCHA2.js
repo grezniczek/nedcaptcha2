@@ -109,7 +109,7 @@ function edit(field) {
 		};
 		// Show dialog
 		$('#nedCAPTCHA-OD-editor').dialog({
-			title: '<code>@NEDCAPTCHA</code> Editor <span style="font-weight: normal;"> &ndash; ' + field + '</span>',
+			title: 'nedCAPTCHA Editor <span style="font-weight: normal;"> &ndash; ' + field + '</span>',
 			modal: true,
 			resizable: false,
 			width: 800,
