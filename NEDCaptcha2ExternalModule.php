@@ -14,6 +14,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	const AT_INSTRUCTIONS = "@NEDCAPTCHA-INSTRUCTIONS";
 	const AT_FAILMESSAGE = "@NEDCAPTCHA-FAILMESSAGE";
 	const AT_DISPLAY = "@NEDCAPTCHA-DISPLAY";
+	const AT_CUSTOMCHALLENGE = "@NEDCAPTCHA-CUSTOM-CHALLENGE";
 
 	const IMAGE_MIN_LENGTH = 3;
 	const IMAGE_MAX_LENGTH = 8;
@@ -98,12 +99,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			self::AT_INSTRUCTIONS, 
 			self::AT_FAILMESSAGE,
 			self::AT_DISPLAY,
+			self::AT_CUSTOMCHALLENGE,
 		], $page_fields[1], null, $context) ?? [];
 		$this->nedcaptcha_fields = array_filter([
 			array_keys($tagged[self::AT_SETUP] ?? [""])[0], 
 			array_keys($tagged[self::AT_INSTRUCTIONS] ?? [""])[0], 
 			array_keys($tagged[self::AT_FAILMESSAGE] ?? [""])[0],
-			array_keys($tagged[self::AT_DISPLAY] ?? [""])[0],
+			...array_keys($tagged[self::AT_DISPLAY] ?? [""]),
+			array_keys($tagged[self::AT_CUSTOMCHALLENGE] ?? [""])[0],
 		], function($v) { return !empty($v); });
 
 		if ($returning || $stored["passed"] || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
@@ -199,6 +202,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		else if ($params["type"] == "image") {
 			$this->scripts_delayed[] = "$('input[name=\"{$captcha_field}\"]')
 				.attr('pattern', '[".CaptchaGenerator::IMAGE_CHARS."]*');";
+		}
+		else if ($params["type"] == "custom") {
+			// Apply @NEDCAPTCHA-CUSTOM-CHALLENGE action tag
+			foreach ($tagged[self::AT_CUSTOMCHALLENGE] as $this_field => $_) {
+				if (in_array($this_field, $this->nedcaptcha_fields, true)) {
+					$this->scripts_delayed[] = "$('input[name=\"{$this_field}\"]').val(".json_encode($captcha->challenge)."); doBranching('$this_field');";
+				}
+			}
 		}
 		// Add the CAPTCHA to the label and then move it in front of the input
 		$Proj->metadata[$captcha_field]["element_label"] .= 

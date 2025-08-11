@@ -26,6 +26,10 @@
         {
             "tag": "@NEDCAPTCHA-DISPLAY",
             "description": "Apply to a decriptive field on the first survey page only. This field will remain visible while the CAPTCHA is presented. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF."
+        },
+        {
+            "tag": "@NEDCAPTCHA-CUSTOM-CHALLENGE",
+            "description": "Only for CAPTCHAs of type <i>Custom</i>, apply to a text box field (without validation) on the first survey page. This field will be filled with the CAPTCHA challenge. This may be useful to implement your own custom CAPTCHA images that are shown in descriptive fields with branching logic based on the value of the random challenge. Consider adding the <code>@HIDDEN</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown."
         }
     ],
     "crons": [
