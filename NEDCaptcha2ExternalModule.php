@@ -473,7 +473,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 			// Get current annotations
 			$Proj = new \Project($project_id);
-			$misc_current = $Proj->getMetadata()[$field]["misc"];
+			$misc_current = $Proj->isDraftMode() 
+				? $Proj->metadata_temp[$field]["misc"]
+				: $Proj->metadata[$field]["misc"];
 			// Replace
 			$pattern = '/^' . preg_quote(self::AT_SETUP, '/') . '\s*=\s*' . preg_quote($tagged[$field][0], '/') . '/m';
 			$replacement = self::AT_SETUP."=".json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

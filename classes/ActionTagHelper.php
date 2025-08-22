@@ -40,8 +40,8 @@ class ActionTagHelper
             $tags = array_map('strtoupper', $tags);
         }
         $Proj = new \Project($project_id);
-        $metadata = $tryDraftMode ? $Proj->getMetadata() : $Proj->metadata;
-        $forms = $tryDraftMode ? $Proj->getForms() : $Proj->forms;
+        $metadata = ($tryDraftMode && $Proj->isDraftMode()) ? $Proj->metadata_temp : $Proj->metadata;
+        $forms = ($tryDraftMode && $Proj->isDraftMode()) ? $Proj->forms_temp : $Proj->forms;
 
         if ($instruments !== null && !is_array($instruments)) $instruments = array($instruments);
         if ($fields !== null && !is_array($fields)) $fields = array($fields);
