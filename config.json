@@ -1,7 +1,7 @@
 {
     "name": "nedCAPTCHA 2",
     "namespace": "DE\\ELISABETHGRUPPE\\NEDCaptcha2ExternalModule",
-    "description": "Adds CATPCHA protection to surveys. <strong><a href=\"https://github.com/grezniczek/nedcaptcha2\">See full documentation here</a></strong>.",
+    "description": "Adds CAPTCHA protection to surveys. <strong><a href=\"https://github.com/grezniczek/nedcaptcha2\">See full documentation here</a></strong>.",
     "framework-version": 16,
     "authors": [
         {
@@ -13,7 +13,7 @@
     "action-tags": [
         {
             "tag": "@NEDCAPTCHA",
-            "description": "Use this action tag on a <i>Text Box</i>-type field (without validation) on the first page of the public survey instrument to set up a CAPTHCA. The field's label will be used as the prompt for the CAPTCHA. Use the setup helper by clicking this action tag on the Online Designer fields view. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF (unless <i>nedCAPTCHA 2</i> is set up to capture the response)."
+            "description": "Use this action tag on a <i>Text Box</i>-type field (without validation) on the first page of the public survey instrument to set up a CAPTCHA. The field's label will be used as the prompt for the CAPTCHA. Use the setup helper by clicking this action tag on the Online Designer fields view. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF (unless <i>nedCAPTCHA 2</i> is set up to capture the response)."
         },
         {
             "tag": "@NEDCAPTCHA-INSTRUCTIONS",
@@ -21,11 +21,11 @@
         },
         {
             "tag": "@NEDCAPTCHA-FAILMESSAGE",
-            "description": "Apply to a decriptive field on the first survey page only. This field will be hidden and only shown when the survey respondent fails the CAPTCHA. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF."
+            "description": "Apply to a descriptive field on the first survey page only. This field will be hidden and only shown when the survey respondent fails the CAPTCHA. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF."
         },
         {
             "tag": "@NEDCAPTCHA-DISPLAY",
-            "description": "Apply to a decriptive field on the first survey page only. This field will remain visible while the CAPTCHA is presented. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF."
+            "description": "Apply to a descriptive field on the first survey page only. This field will remain visible while the CAPTCHA is presented. Consider adding the <code>@HIDDEN-FORM</code> and <code>@HIDDEN-PDF</code> action tags to this field to prevent it from being shown on the data entry form or on the PDF."
         },
         {
             "tag": "@NEDCAPTCHA-CUSTOM-CHALLENGE",

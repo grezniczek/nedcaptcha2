@@ -64,7 +64,7 @@ if ($is_plugin) {
 				<li class="nedCAPTCHA-setup-setting">
 					<div id="nedCAPTCHA-complexity">
 						Complexity
-						<div class="nedCAPTCHA-setup-description">Simple problems will be limited to additions, while complex problems include two of addition, subtraction, and multiplication (however, there will never be two multiplications, as results could get quite large.</div>
+						<div class="nedCAPTCHA-setup-description">Simple problems will be limited to additions, while complex problems include two of addition, subtraction, and multiplication (however, there will never be two multiplications, as results could get quite large).</div>
 					</div>
 					<div class="d-flex gap-2">
 						<div class="form-check">
@@ -159,7 +159,7 @@ if ($is_plugin) {
 				<div class="form-check mt-2">
 					<input class="form-check-input" type="checkbox" name="caseInsensitive" id="nedCAPTCHA-caseInsensitive" <?=$defaults["caseInsensitive"] ? "checked" : ""?>>
 					<label class="form-check-label" for="nedCAPTCHA-caseInsensitive">
-						Use case-insensitve comparison for responses
+						Use case-insensitive comparison for responses
 					</label>
 				</div>
 			</div>
