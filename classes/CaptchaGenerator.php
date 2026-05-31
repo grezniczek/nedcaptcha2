@@ -36,7 +36,10 @@ class CaptchaGenerator
 		// Pick a random challenge
 		$index = mt_rand(0, count($settings["custom"]) - 1);
 		$this->challenge = $settings["custom"][$index]["challenge"];
-		$this->expected = trim(strtolower($settings["custom"][$index]["response"]));
+		$this->expected = trim($settings["custom"][$index]["response"]);
+		if ($settings["caseInsensitive"]) {
+			$this->expected = mb_strtolower($this->expected);
+		}
 	}
 
 	/**
@@ -219,7 +222,7 @@ class CaptchaGenerator
 			"none" => 0,
 			"slight" => 7,
 			"medium" => 11,
-			"string" => 15,
+			"strong" => 15,
 		];
 		$densities = [
 			"off" => 0.0,

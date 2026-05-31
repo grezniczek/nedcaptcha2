@@ -63,7 +63,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// Stop here if there is no survey hash (includes, e.g., the close window page)
 		if ($sh == "") return;
 		// Do not interfere with returning or passthru requests
-		if ($_SERVER['REQUEST_METHOD'] == 'GET' && $_GET["__return"] == "1") return;
+		if ($_SERVER['REQUEST_METHOD'] == 'GET' && ($_GET["__return"] ?? "") == "1") return;
 		if (isset($_GET["__passthru"])) return;
 		if (isset($_GET["__endpublicsurvey"])) {
 			// Validate response hash
