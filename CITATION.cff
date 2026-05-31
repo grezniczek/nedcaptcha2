@@ -1,11 +1,38 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-authors:
-- family-names: "Rezniczek"
-  given-names: "Günther A."
-  orcid: "https://orcid.org/0000-0002-0852-6002"
+message: "If you use nedCAPTCHA 2 in work that produces a research output, please cite this software and cite REDCap separately."
+type: software
 title: "nedCAPTCHA 2 (REDCap External Module)"
-version: 1.0.0
-doi: 10.5281/zenodo.xxx
-date-released: 2025-07-01
+abstract: "nedCAPTCHA 2 is a REDCap External Module that adds CAPTCHA protection to public surveys without using external CAPTCHA services. It supports math, distorted-image, and custom challenge-response CAPTCHAs configured through REDCap action tags on the first public survey page."
+authors:
+  - family-names: "Rezniczek"
+    given-names: "Günther A."
+    orcid: "https://orcid.org/0000-0002-0852-6002"
+    affiliation: "St. Elisabethgruppe GmbH - Marien Hospital Herne, Klinikum der Ruhr-Universität Bochum"
+version: "1.0.0"
+date-released: "2025-07-01"
+license: "MIT"
+doi: "10.5281/zenodo.xxx"
 url: "https://github.com/grezniczek/nedcaptcha2"
+repository-code: "https://github.com/grezniczek/nedcaptcha2"
+keywords:
+  - "REDCap"
+  - "External Module"
+  - "CAPTCHA"
+  - "survey"
+  - "privacy"
+  - "no external dependencies"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.xxx"
+    description: "Archived software release"
+preferred-citation:
+  type: software
+  title: "nedCAPTCHA 2 (REDCap External Module)"
+  authors:
+    - family-names: "Rezniczek"
+      given-names: "Günther A."
+      orcid: "https://orcid.org/0000-0002-0852-6002"
+  version: "1.0.0"
+  date-released: "2025-07-01"
+  doi: "10.5281/zenodo.xxx"
+  url: "https://github.com/grezniczek/nedcaptcha2"
