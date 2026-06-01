@@ -43,7 +43,11 @@ There are no system-level settings besides the standard External Modules Framewo
 
 The only project-level setting is **Debug mode**, available to super users. When enabled, nedCAPTCHA 2 prints additional diagnostic information to the browser console.
 
-All CAPTCHA behavior is configured through the `@NEDCAPTCHA` action tag. In the Online Designer, click the `@NEDCAPTCHA` action tag on the field list to open the nedCAPTCHA Editor. Manual JSON editing is possible, but the editor is the recommended way to maintain settings.
+All CAPTCHA behavior is configured through the `@NEDCAPTCHA` action tag. In the Online Designer, click the `@NEDCAPTCHA` action tag on the field list to open the nedCAPTCHA Editor. Manual JSON editing is possible, but the editor is the recommended way to maintain settings. The JSON configuration format is described by [schema/nedcaptcha-action-tag.schema.json](schema/nedcaptcha-action-tag.schema.json).
+
+![Opening the nedCAPTCHA Editor from the Online Designer](images/gui-trigger.png)
+
+![nedCAPTCHA Editor dialog](images/gui-dialog.png)
 
 ## Basic Setup
 
@@ -62,6 +66,37 @@ The `@NEDCAPTCHA` field and other nedCAPTCHA helper fields are removed from norm
 Required to protect a public survey. Add it to one Text Box field without validation on the first survey page. The action tag accepts a JSON object containing the CAPTCHA configuration.
 
 Only one `@NEDCAPTCHA` field should be used on a survey page.
+
+Example math configuration:
+
+```text
+@NEDCAPTCHA={
+  "type": "math",
+  "complexity": "complex",
+  "minValue": 2,
+  "maxValue": 12,
+  "showAsText": true
+}
+```
+
+Example custom challenge-response configuration:
+
+```text
+@NEDCAPTCHA={
+  "type": "custom",
+  "caseInsensitive": true,
+  "custom": [
+    {
+      "challenge": "The color of the sky?",
+      "response": "blue"
+    },
+    {
+      "challenge": "Type the access key to proceed.",
+      "response": "secretaccesskey"
+    }
+  ]
+}
+```
 
 ### `@NEDCAPTCHA-INSTRUCTIONS`
 
