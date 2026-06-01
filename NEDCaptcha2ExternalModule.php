@@ -689,7 +689,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$session["lastSeen"] = $now;
 		$this->framework->removeLogs("message = ?", $store_key);
 		$this->framework->log($store_key, $session);
-		$this->setSolvedSessionCookie($project_id, $token, $expires_at);
 		return true;
 	}
 
@@ -723,9 +722,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		return self::SESSION_STORE_KEY . intval($project_id) . "_" . $token;
 	}
 
-	/**
-	 * @psalm-taint-escape cookie
-	 */
 	private function sanitizeSolvedSessionToken($token) {
 		if (!is_string($token) || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) return null;
 		return $token;
