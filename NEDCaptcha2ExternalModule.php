@@ -651,9 +651,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if (!$this->areSolvedSessionsAllowed()) return false;
 
 		$cookie_name = $this->getSolvedSessionCookieName($project_id);
-		$token = $_COOKIE[$cookie_name] ?? "";
-		if (!$this->isValidSolvedSessionToken($token)) {
-			if ($token !== "") $this->clearSolvedSessionCookie($project_id);
+		$raw_token = $_COOKIE[$cookie_name] ?? "";
+		$token = $this->sanitizeSolvedSessionToken($raw_token);
+		if ($token === null) {
+			if ($raw_token !== "") $this->clearSolvedSessionCookie($project_id);
 			return false;
 		}
 
@@ -722,8 +723,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		return self::SESSION_STORE_KEY . intval($project_id) . "_" . $token;
 	}
 
-	private function isValidSolvedSessionToken($token) {
-		return is_string($token) && preg_match('/^[a-f0-9]{64}$/', $token) === 1;
+	/**
+	 * @psalm-taint-escape cookie
+	 */
+	private function sanitizeSolvedSessionToken($token) {
+		if (!is_string($token) || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) return null;
+		return $token;
 	}
 
 	private function setSolvedSessionCookie($project_id, $token, $expires_at) {
