@@ -227,10 +227,10 @@ BibTeX:
 @software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2026,
   author = {Rezniczek, Günther A.},
   title = {{nedCAPTCHA 2 (REDCap External Module)}},
-  version = {1.0.0},
+  version = {1.1.0},
   year = {2026},
   month = {6},
-  doi = {10.5281/zenodo.20492803},
+  doi = {10.5281/zenodo.20499083},
   url = {https://github.com/grezniczek/nedcaptcha2}
 }
 ```
