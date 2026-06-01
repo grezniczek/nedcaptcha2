@@ -195,7 +195,7 @@ class CaptchaGenerator
 			imagepng($img);
 			$png = ob_get_contents();
 			ob_end_clean();
-			imagedestroy($img);
+			unset($img);
 			// Create the img tag.
 			$data = base64_encode($png);
 			return "<img src=\"data:image/png;base64,{$data}\" alt=\"CAPTCHA\" />";
@@ -292,7 +292,7 @@ class CaptchaGenerator
 			imagepng($img);
 			$png = ob_get_contents();
 			ob_end_clean();
-			imagedestroy($img);
+			unset($img);
 			// Create the img tag.
 			$data = base64_encode($png);
 			return "<img src=\"data:image/png;base64,{$data}\" alt=\"CAPTCHA\" />";
