@@ -212,6 +212,7 @@ Version | Changes
 ------- | -----------
 1.0.0   | Initial release.
 1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
+1.1.1   | Minor code refactor.
 
 ## How to Cite This Work
 
@@ -227,10 +228,10 @@ BibTeX:
 @software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2026,
   author = {Rezniczek, Günther A.},
   title = {{nedCAPTCHA 2 (REDCap External Module)}},
-  version = {1.1.0},
+  version = {1.1.1},
   year = {2026},
   month = {6},
-  doi = {10.5281/zenodo.20499083},
+  doi = {10.5281/zenodo.20499255},
   url = {https://github.com/grezniczek/nedcaptcha2}
 }
 ```
