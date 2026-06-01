@@ -37,6 +37,8 @@ The custom challenge type can also be used as lightweight public-survey password
 - In REDCap, go to _Control Center > Technical / Developer Tools > External Modules_ and enable **nedCAPTCHA 2**.
 - Enable the module in projects that need public survey CAPTCHA protection.
 
+An importable REDCap demo project is available at [example/Demo_nedCAPTCHA2.REDCap.xml](example/Demo_nedCAPTCHA2.REDCap.xml).
+
 ## Configuration
 
 There are no system-level settings besides the standard External Modules Framework controls.
