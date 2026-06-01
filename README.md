@@ -43,7 +43,11 @@ An importable REDCap demo project is available at [example/Demo_nedCAPTCHA2.REDC
 
 There are no system-level settings besides the standard External Modules Framework controls.
 
-The only project-level setting is **Debug mode**, available to super users. When enabled, nedCAPTCHA 2 prints additional diagnostic information to the browser console.
+Project-level settings:
+
+- **Debug mode:** Available to super users. When enabled, nedCAPTCHA 2 prints additional diagnostic information to the browser console.
+- **Allow solved CAPTCHA sessions:** When enabled, a browser that has solved the CAPTCHA may reuse that solved state for the same project's public survey without solving again in a new tab.
+- **Solved CAPTCHA session timeout:** Number of minutes a solved session remains valid. The default is 120 minutes. Use `0` for no configured timeout; sessions are still capped at 24 hours and expire after 2 hours without refresh.
 
 All CAPTCHA behavior is configured through the `@NEDCAPTCHA` action tag. In the Online Designer, click the `@NEDCAPTCHA` action tag on the field list to open the nedCAPTCHA Editor. Manual JSON editing is possible, but the editor is the recommended way to maintain settings. The JSON configuration format is described by [schema/nedcaptcha-action-tag.schema.json](schema/nedcaptcha-action-tag.schema.json).
 
@@ -199,13 +203,15 @@ For example:
 - The Save & Return Later button is hidden while the CAPTCHA is being presented.
 - Hidden REDCap fields, except the CSRF token and nedCAPTCHA's own temporary client key, are removed from the CAPTCHA form before submission.
 - If custom type is selected without any valid challenge-response pairs, validation falls back to a math CAPTCHA.
+- Solved CAPTCHA sessions are disabled by default. When disabled, opening the same public survey in a new tab requires solving the CAPTCHA again.
+- When solved CAPTCHA sessions are enabled, the solved state is stored as an opaque browser cookie backed by server-side session metadata. It applies only to the same browser and the same project public survey.
 
 ## Changelog
 
 Version | Changes
 ------- | -----------
 1.0.0   | Initial release.
-1.0.1   | Minor PHP 8.5 compatibility fix.
+1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
 
 ## How to Cite This Work
 

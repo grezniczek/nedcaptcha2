@@ -51,6 +51,16 @@
             "name": "Debug mode",
             "type": "checkbox",
             "super-users-only": true
+        },
+        {
+            "key": "allow-sessions",
+            "name": "Allow solved CAPTCHA sessions",
+            "type": "checkbox"
+        },
+        {
+            "key": "session-timeout-minutes",
+            "name": "Solved CAPTCHA session timeout in minutes (default: 120; 0 = no configured timeout, capped at 24 hours and 2 hours idle)",
+            "type": "text"
         }
     ],
     "auth-ajax-actions": [

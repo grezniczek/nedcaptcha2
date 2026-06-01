@@ -6,6 +6,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	
 	const CLIENT_KEY = "__nedcaptcha2__ck__";
 	const STORE_KEY = "__nedcaptcha2__";
+	const SESSION_COOKIE_PREFIX = "__nedcaptcha2session__";
+	const SESSION_STORE_KEY = "__nedcaptcha2session__";
 
 	const AT_SETUP = "@NEDCAPTCHA";
 	const AT_INSTRUCTIONS = "@NEDCAPTCHA-INSTRUCTIONS";
@@ -20,6 +22,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	/** @var int The number of minutes a CAPTCHA is valid for */
 	const CAPTCHA_EXPIRATION = 120; 
+	const SESSION_DEFAULT_TIMEOUT_MINUTES = 120;
+	const SESSION_HARD_MAX_MINUTES = 1440;
+	const SESSION_IDLE_MAX_MINUTES = 120;
 
 	private $nedcaptcha_fields = [];
 	private $scripts_delayed = [];
@@ -107,8 +112,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			array_keys($tagged[self::AT_CUSTOMCHALLENGE] ?? [""])[0],
 			// AT_CUSTOMEMBED will be considered later
 		], function($v) { return !empty($v); });
+		$session_passed = $psh == $sh && isset($tagged[self::AT_SETUP]) && $this->validateSolvedSession($project_id, $psh);
 
-		if ($returning || $stored["passed"] || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
+		if ($returning || $stored["passed"] || $session_passed || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
 			// We are outside any context where the CAPTCHA should be shown
 			// Remove the fields
 			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
@@ -168,6 +174,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		if ($passed) {
 			// CAPTCHA was solved
+			$this->createSolvedSession($project_id, $psh);
 			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
 			foreach ($this->nedcaptcha_fields as $field) {
 				unset($Proj->metadata[$field]);
@@ -505,6 +512,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$timestamp = date("Y-m-d H:i:s", time() - (self::CAPTCHA_EXPIRATION * 60));
 		$sql = "project_id > 0 and message LIKE '".self::STORE_KEY."%' and timestamp < ?";
 		$this->framework->removeLogs($sql, [$timestamp]);
+
+		// Solved-session rows are refreshed whenever a valid session is used, so
+		// stale rows older than the idle limit can be removed by log timestamp.
+		$session_timestamp = date("Y-m-d H:i:s", time() - (self::SESSION_IDLE_MAX_MINUTES * 60));
+		$session_sql = "project_id > 0 and message LIKE '".self::SESSION_STORE_KEY."%' and timestamp < ?";
+		$this->framework->removeLogs($session_sql, [$session_timestamp]);
 	}
 
 	#endregion
@@ -619,6 +632,138 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 			return $validated;
 		}
+	}
+
+	private function areSolvedSessionsAllowed() {
+		return $this->getProjectSetting("allow-sessions") == true;
+	}
+
+	private function getSolvedSessionTimeoutMinutes() {
+		$value = trim("{$this->getProjectSetting("session-timeout-minutes")}");
+		if ($value === "") return self::SESSION_DEFAULT_TIMEOUT_MINUTES;
+		if (!preg_match('/^\d+$/', $value)) return self::SESSION_DEFAULT_TIMEOUT_MINUTES;
+		$minutes = intval($value);
+		if ($minutes === 0) return 0;
+		return min($minutes, self::SESSION_HARD_MAX_MINUTES);
+	}
+
+	private function validateSolvedSession($project_id, $public_survey_hash) {
+		if (!$this->areSolvedSessionsAllowed()) return false;
+
+		$cookie_name = $this->getSolvedSessionCookieName($project_id);
+		$token = $_COOKIE[$cookie_name] ?? "";
+		if (!$this->isValidSolvedSessionToken($token)) {
+			if ($token !== "") $this->clearSolvedSessionCookie($project_id);
+			return false;
+		}
+
+		$store_key = $this->getSolvedSessionStoreKey($project_id, $token);
+		$result = $this->queryLogs("SELECT project_id, publicSurveyHash, createdAt, lastSeen, expiresAt WHERE message = ?", $store_key);
+		$session = $result->fetch_assoc();
+		if ($session == null) {
+			$this->clearSolvedSessionCookie($project_id);
+			return false;
+		}
+
+		$now = time();
+		$created_at = intval($session["createdAt"] ?? 0);
+		$last_seen = intval($session["lastSeen"] ?? 0);
+		$expires_at = intval($session["expiresAt"] ?? 0);
+		$is_valid =
+			intval($session["project_id"] ?? 0) === intval($project_id) &&
+			($session["publicSurveyHash"] ?? "") === $public_survey_hash &&
+			$created_at > 0 &&
+			$last_seen > 0 &&
+			$expires_at > 0 &&
+			$now <= $expires_at &&
+			($now - $last_seen) <= self::SESSION_IDLE_MAX_MINUTES * 60 &&
+			($now - $created_at) <= self::SESSION_HARD_MAX_MINUTES * 60;
+
+		if (!$is_valid) {
+			$this->framework->removeLogs("message = ?", $store_key);
+			$this->clearSolvedSessionCookie($project_id);
+			return false;
+		}
+
+		$session["lastSeen"] = $now;
+		$this->framework->removeLogs("message = ?", $store_key);
+		$this->framework->log($store_key, $session);
+		$this->setSolvedSessionCookie($project_id, $token, $expires_at);
+		return true;
+	}
+
+	private function createSolvedSession($project_id, $public_survey_hash) {
+		if (!$this->areSolvedSessionsAllowed()) return;
+
+		$token = bin2hex(random_bytes(32));
+		$now = time();
+		$timeout = $this->getSolvedSessionTimeoutMinutes();
+		$expires_at = $now + (($timeout > 0 ? $timeout : self::SESSION_HARD_MAX_MINUTES) * 60);
+		$expires_at = min($expires_at, $now + self::SESSION_HARD_MAX_MINUTES * 60);
+
+		$store_key = $this->getSolvedSessionStoreKey($project_id, $token);
+		$session = [
+			"project_id" => intval($project_id),
+			"publicSurveyHash" => $public_survey_hash,
+			"createdAt" => $now,
+			"lastSeen" => $now,
+			"expiresAt" => $expires_at,
+		];
+		$this->framework->removeLogs("message = ?", $store_key);
+		$this->framework->log($store_key, $session);
+		$this->setSolvedSessionCookie($project_id, $token, $expires_at);
+	}
+
+	private function getSolvedSessionCookieName($project_id) {
+		return self::SESSION_COOKIE_PREFIX . intval($project_id);
+	}
+
+	private function getSolvedSessionStoreKey($project_id, $token) {
+		return self::SESSION_STORE_KEY . intval($project_id) . "_" . $token;
+	}
+
+	private function isValidSolvedSessionToken($token) {
+		return is_string($token) && preg_match('/^[a-f0-9]{64}$/', $token) === 1;
+	}
+
+	private function setSolvedSessionCookie($project_id, $token, $expires_at) {
+		if (headers_sent()) return;
+		$_COOKIE[$this->getSolvedSessionCookieName($project_id)] = $token;
+		$this->setCookieCompat($this->getSolvedSessionCookieName($project_id), $token, $expires_at);
+	}
+
+	private function clearSolvedSessionCookie($project_id) {
+		if (headers_sent()) return;
+		unset($_COOKIE[$this->getSolvedSessionCookieName($project_id)]);
+		$this->setCookieCompat($this->getSolvedSessionCookieName($project_id), "", time() - 3600);
+	}
+
+	private function setCookieCompat($name, $value, $expires_at) {
+		$options = [
+			"expires" => $expires_at,
+			"path" => $this->getSolvedSessionCookiePath(),
+			"secure" => $this->isHttpsRequest(),
+			"httponly" => true,
+			"samesite" => "Lax",
+		];
+		if (PHP_VERSION_ID >= 70300) {
+			setcookie($name, $value, $options);
+		}
+		else {
+			setcookie($name, $value, $options["expires"], $options["path"] . "; SameSite=Lax", "", $options["secure"], $options["httponly"]);
+		}
+	}
+
+	private function getSolvedSessionCookiePath() {
+		$path = defined("APP_PATH_SURVEY") ? parse_url(APP_PATH_SURVEY, PHP_URL_PATH) : "/";
+		if (!is_string($path) || $path === "") return "/";
+		if ($path[0] !== "/") $path = "/$path";
+		return rtrim($path, "/") . "/";
+	}
+
+	private function isHttpsRequest() {
+		return (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off") ||
+			(($_SERVER["HTTP_X_FORWARDED_PROTO"] ?? "") === "https");
 	}
 
 	private function inject_online_designer($project_id, $instrument) {
