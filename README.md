@@ -1,6 +1,6 @@
 # nedCAPTCHA 2 (REDCap External Module)
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.xxx.svg)](https://doi.org/10.5281/zenodo.xxx)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20492803.svg)](https://doi.org/10.5281/zenodo.20492803)
 
 nedCAPTCHA 2 adds CAPTCHA protection to REDCap public surveys without depending on an external CAPTCHA provider. The name stands for **n**o **e**xternal **d**ependencies.
 
@@ -175,18 +175,18 @@ If you use this external module for a project that generates a research output, 
 
 APA style:
 
-> Rezniczek, G. A. (2025). nedCAPTCHA 2 (REDCap External Module) [Computer software]. https://doi.org/10.5281/zenodo.xxx
+> Rezniczek, G. A. (2026). nedCAPTCHA 2 (REDCap External Module) [Computer software]. https://doi.org/10.5281/zenodo.20492803
 
 BibTeX:
 
 ```bibtex
-@software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2025,
+@software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2026,
   author = {Rezniczek, Günther A.},
   title = {{nedCAPTCHA 2 (REDCap External Module)}},
   version = {1.0.0},
-  year = {2025},
-  month = {7},
-  doi = {10.5281/zenodo.xxx},
+  year = {2026},
+  month = {6},
+  doi = {10.5281/zenodo.20492803},
   url = {https://github.com/grezniczek/nedcaptcha2}
 }
 ```

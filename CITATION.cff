@@ -9,9 +9,9 @@ authors:
     orcid: "https://orcid.org/0000-0002-0852-6002"
     affiliation: "St. Elisabethgruppe GmbH - Marien Hospital Herne, Klinikum der Ruhr-Universität Bochum"
 version: "1.0.0"
-date-released: "2025-07-01"
+date-released: "2026-06-01"
 license: "MIT"
-doi: "10.5281/zenodo.xxx"
+doi: "10.5281/zenodo.20492803"
 url: "https://github.com/grezniczek/nedcaptcha2"
 repository-code: "https://github.com/grezniczek/nedcaptcha2"
 keywords:
@@ -23,7 +23,7 @@ keywords:
   - "no external dependencies"
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.xxx"
+    value: "10.5281/zenodo.20492803"
     description: "Archived software release"
 preferred-citation:
   type: software
@@ -33,6 +33,6 @@ preferred-citation:
       given-names: "Günther A."
       orcid: "https://orcid.org/0000-0002-0852-6002"
   version: "1.0.0"
-  date-released: "2025-07-01"
-  doi: "10.5281/zenodo.xxx"
+  date-released: "2026-05-01"
+  doi: "10.5281/zenodo.20492803"
   url: "https://github.com/grezniczek/nedcaptcha2"
