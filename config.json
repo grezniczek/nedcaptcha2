@@ -1,6 +1,6 @@
 {
     "name": "nedCAPTCHA 2",
-    "namespace": "DE\\ELISABETHGRUPPE\\NEDCaptcha2ExternalModule",
+    "namespace": "DE\\RUB\\SEG\\NEDCaptcha2ExternalModule",
     "description": "Adds CAPTCHA protection to surveys. <strong><a href=\"https://github.com/grezniczek/nedcaptcha2\">See full documentation here</a></strong>.",
     "framework-version": 16,
     "authors": [

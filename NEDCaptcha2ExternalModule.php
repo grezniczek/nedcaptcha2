@@ -1,9 +1,6 @@
-<?php namespace DE\ELISABETHGRUPPE\NEDCaptcha2ExternalModule;
+<?php namespace DE\RUB\SEG\NEDCaptcha2ExternalModule;
 
 use ExternalModules\AbstractExternalModule;
-
-require_once "classes/Color.php";
-require_once "classes/CaptchaGenerator.php";
 
 class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	
@@ -94,7 +91,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		list($page_fields, $total_pages) = \Survey::getPageFields($instrument, true);
 		
 		// Check for action tags
-		require_once "classes/ActionTagHelper.php";
 		$tagged = ActionTagHelper::getActionTags($project_id, [
 			self::AT_SETUP, 
 			self::AT_INSTRUCTIONS, 
@@ -377,7 +373,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($action == "get-params") {
 			$field = $payload["field"];
 
-			require_once "classes/ActionTagHelper.php";
 			$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], $field, null, null, true)[self::AT_SETUP] ?? [];
 
 			if (count($tagged) == 0) return "ERROR";
@@ -415,7 +410,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($action == "set-params") {
 			$field = $payload["field"];
 			// Validate
-			require_once "classes/ActionTagHelper.php";
 			$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], $field, null, null, true)[self::AT_SETUP] ?? [];
 			if (count($tagged) == 0) return [
 				"errors" => ["Invalid request."],
@@ -629,12 +623,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	private function inject_online_designer($project_id, $instrument) {
 		// Check for action tags
-		require_once "classes/ActionTagHelper.php";
 		$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], null, [$instrument], null, true)[self::AT_SETUP] ?? [];
 
 		if (count($tagged) == 0) return;
 
-		require_once "classes/InjectionHelper.php";
 		$ih = InjectionHelper::init($this);
 		$ih->css("css/nedCAPTCHA2.css");
 		$ih->js("js/nedCAPTCHA2.js");
@@ -648,9 +640,25 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			"linkTitle" => "Edit CAPTCHA settings",
 			"updateLabel" => "Update"
 		];
-		print \RCView::script("DE_ELISABETHGRUPPE_nedCAPTCHA2.init(".
+		print \RCView::script("DE_RUB_SEG_nedCAPTCHA2.init(".
 			json_encode($config).", $jsmo);");
 	}
 
 	#endregion
 }
+
+spl_autoload_register(function ($class) {
+	$prefix = __NAMESPACE__ . "\\";
+	$prefix_length = strlen($prefix);
+
+	if (strncmp($prefix, $class, $prefix_length) !== 0) {
+		return;
+	}
+
+	$relative_class = substr($class, $prefix_length);
+	$file = __DIR__ . "/classes/" . str_replace("\\", DIRECTORY_SEPARATOR, $relative_class) . ".php";
+
+	if (is_file($file)) {
+		require_once $file;
+	}
+});

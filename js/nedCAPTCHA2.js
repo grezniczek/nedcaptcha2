@@ -1,19 +1,15 @@
 // nedCAPTCHA 2 EM
-// Dr. Günther Rezniczek, Marien Hospital Herne, Klinikum der Ruhr-Universität Bochum
-// @ts-check
 ;(function() {
 
 //#region Init global object and define local variables
 
 const EM_NAME = 'nedCAPTCHA2';
-const NS_PREFIX = 'DE_ELISABETHGRUPPE_';
+const NS_PREFIX = 'DE_RUB_SEG_';
 
-// @ts-ignore
 const EM = window[NS_PREFIX + EM_NAME] ?? {
 	init: initialize,
 	edit: edit
 };
-// @ts-ignore
 window[NS_PREFIX + EM_NAME] = EM;
 
 /** Configuration data supplied from the server */
@@ -128,24 +124,20 @@ function edit(field) {
 								log('Update result:', response);
 								if (response.errors.length) {
 									const errors = '<ul>' + response.errors.map(err => '<li>' + err + '</li>').join('') + '</ul><i>Please try again after reloading the page.</i>';
-									// @ts-ignore base.js
 									toasts.push(showToast("nedCAPTCHA ERROR", errors, "error"));
 									return;
 								}
 								if (response.warnings.length) {
 									const warnings = '<ul>' + response.warnings.map(w => '<li>' + w + '</li>').join('') + '</ul><i>Please fix the issues and try again.</i>';
-									// @ts-ignore base.js
 									toasts.push(showToast("nedCAPTCHA WARNING", warnings, "error"));
 									return;
 								}
 								// Success
-								// @ts-ignore base.js
 								showToast("SUCCESS", "nedCAPTCHA configuration has been updated", "success", 1000);
 								close();
 							})
 							.catch(function(err) {
 								log(err);
-								// @ts-ignore base.js
 								showToast("nedCAPTCHA ERROR", 'An unknown error occured.', "error");
 							});
 						}

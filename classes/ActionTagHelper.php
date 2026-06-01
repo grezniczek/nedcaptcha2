@@ -1,4 +1,4 @@
-<?php namespace DE\ELISABETHGRUPPE\NEDCaptcha2ExternalModule;
+<?php namespace DE\RUB\SEG\NEDCaptcha2ExternalModule;
 
 use \REDCap as REDCap;
 

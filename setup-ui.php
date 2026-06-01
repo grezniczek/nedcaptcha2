@@ -1,4 +1,4 @@
-<?php namespace DE\ELISABETHGRUPPE\NEDCaptcha2ExternalModule;
+<?php namespace DE\RUB\SEG\NEDCaptcha2ExternalModule;
 
 $is_plugin = !isset($defaults) || !isset($defaults["type"]);
 if ($is_plugin) {
