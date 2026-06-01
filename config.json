@@ -65,5 +65,9 @@
                 "show-header-and-footer": true
             }
         ]
-    }
+    },
+    "md-allow-relative-hrefs": [
+        "example/*.xml",
+        "schema/*.json"
+    ]
 }
