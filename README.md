@@ -213,6 +213,7 @@ Version | Changes
 1.0.0   | Initial release.
 1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
 1.1.1   | Minor code refactor.
+1.1.2   | Removed "Test" link (development artifact).
 
 ## How to Cite This Work
 
