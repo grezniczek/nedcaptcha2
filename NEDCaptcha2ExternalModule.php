@@ -34,6 +34,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	private $errors = [];
 	private $warnings = [];
 	private $active = false;
+	private $suppress_logic_emitters = false;
 
 	#region Hooks
 
@@ -320,6 +321,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 		$Proj->metadata = array_intersect_key($Proj->metadata, array_flip($keep_fields));
 		$Proj->forms[$instrument]['fields'] = array_intersect_key($Proj->forms[$instrument]['fields'], array_flip($keep_fields));
+		$this->suppress_logic_emitters = true;
 	}
 
 	function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
@@ -343,6 +345,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 
 		if (!$this->active) return;
+
+		if ($this->suppress_logic_emitters) {
+			// REDCap creates and populates these emitters after redcap_every_page_before_render().
+			// Replace them here, after buildFormData() but before REDCap exports their JavaScript.
+			$logic_emitter = new CalculateDummy();
+			$GLOBALS["cp"] = $logic_emitter;
+			$GLOBALS["bl"] = $logic_emitter;
+		}
 
 		$this->initializeJavascriptModuleObject();
 
