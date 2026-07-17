@@ -200,6 +200,7 @@ For example:
 ## Notes and Limitations
 
 - The module is intended for the first page of a fresh public survey. It does not protect data-entry forms, authenticated survey links tied to existing records, returning surveys, survey queue passthroughs, or end-of-survey/return-code flows.
+- Calculated fields are not evaluated while the CAPTCHA-only page is displayed. Normal calculation behavior resumes after the CAPTCHA is passed. Branching logic remains available for `@NEDCAPTCHA-CUSTOM-CHALLENGE`; logic used on the CAPTCHA-only page should reference fields retained on that page.
 - The Save & Return Later button is hidden while the CAPTCHA is being presented.
 - Hidden REDCap fields, except the CSRF token and nedCAPTCHA's own temporary client key, are removed from the CAPTCHA form before submission.
 - If custom type is selected without any valid challenge-response pairs, validation falls back to a math CAPTCHA.
@@ -214,6 +215,7 @@ Version | Changes
 1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
 1.1.1   | Minor code refactor.
 1.1.2   | Removed "Test" link (development artifact).
+1.1.3   | Prevented REDCap calculation JavaScript from running against fields removed from the CAPTCHA-only survey page while retaining branching logic for custom challenges.
 
 ## How to Cite This Work
 
@@ -229,10 +231,10 @@ BibTeX:
 @software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2026,
   author = {Rezniczek, Günther A.},
   title = {{nedCAPTCHA 2 (REDCap External Module)}},
-  version = {1.1.1},
+  version = {1.1.3},
   year = {2026},
-  month = {6},
-  doi = {10.5281/zenodo.20499255},
+  month = {7},
+  doi = {10.5281/zenodo.20492803},
   url = {https://github.com/grezniczek/nedcaptcha2}
 }
 ```
