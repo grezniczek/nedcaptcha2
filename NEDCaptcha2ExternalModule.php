@@ -152,15 +152,17 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($params["type"] == "custom") {
 			if ($params["caseInsensitive"]) {
 				$response = mb_strtolower($response);
-				$expected = mb_strtolower($expected);
+				if ($expected !== null) $expected = mb_strtolower((string)$expected);
 			}
 		}
 		else {
 			$response = strtolower($response);
 		}
 		// Check response
-		$passed = $stored["passed"] || 
-			($expected != null && $expected == $response);
+		$matches = $expected !== null && ($params["type"] === "math"
+			? $expected == $response
+			: (string)$expected === $response);
+		$passed = $stored["passed"] || $matches;
 
 		// Reset expected?
 		$expected = ($passed || $params["reuse"]) ? $stored["expected"] : null;

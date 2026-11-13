@@ -79,5 +79,15 @@ namespace {
     check(strpos($GLOBALS['Proj']->metadata['captcha']['element_label'], 'Question') !== false, 'Custom challenge missing');
     restore_error_handler();
 
+    $key = NEDCaptcha2ExternalModule::STORE_KEY . 'public-hash_' . Crypto::getGuid();
+    foreach ([['0123', '123', false], ['0123', '0123', true], ['0e123', '0', false], ['0e123', '0e123', true], ['Secret', 'secret', false]] as [$expected, $answer, $passes]) {
+        SurveyFramework::$logs[$key] = ['expected' => $expected, 'passed' => false];
+        request(['type' => 'custom', 'custom' => [['challenge' => 'Key', 'response' => $expected]]], [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid(), 'captcha' => $answer]);
+        check(SurveyFramework::$logs[$key]['passed'] === $passes, 'Custom answers must match literally');
+    }
+    SurveyFramework::$logs[$key] = ['expected' => 'secret', 'passed' => false];
+    request(['type' => 'custom', 'caseInsensitive' => true, 'custom' => [['challenge' => 'Key', 'response' => 'Secret']]], [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid(), 'captcha' => 'SECRET']);
+    check(SurveyFramework::$logs[$key]['passed'] === true, 'Case-insensitive comparison was lost');
+
     echo "Survey hook regressions passed.\n";
 }
