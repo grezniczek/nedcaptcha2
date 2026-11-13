@@ -409,7 +409,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 			// Generate HTML by capturing the output from including setup-ui.php
 			ob_start();
-			require_once "setup-ui.php";
+			require "setup-ui.php";
 			$html = ob_get_contents();
 			ob_end_clean();
 

@@ -154,7 +154,7 @@ if ($is_plugin) {
 					Enter pairs of challenges (displayed to the survey respondent) and responses (the expected answers), separated by the equal signs (=), one pair per line. For the CAPTCHA, a random pair will be chosen.
 				</div>
 				<div class="mt-2">
-					<textarea id="nedCAPTCHA-custom" name="custom" class="form-control form-control-sm" placeholder="Challenge = Response" rows="20"><?=$custom_pairs?></textarea>
+						<textarea id="nedCAPTCHA-custom" name="custom" class="form-control form-control-sm" placeholder="Challenge = Response" rows="20"><?=htmlspecialchars($custom_pairs, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')?></textarea>
 				</div>
 				<div class="form-check mt-2">
 					<input class="form-check-input" type="checkbox" name="caseInsensitive" id="nedCAPTCHA-caseInsensitive" <?=$defaults["caseInsensitive"] ? "checked" : ""?>>

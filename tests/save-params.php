@@ -185,5 +185,18 @@ namespace {
     check($response['params']['type'] === 'image', 'Configured type must be preserved');
     $checks++;
 
+    $text = '</textarea><script>window.audit = true</script>&"';
+    Project::$annotation = '@NEDCAPTCHA=' . json_encode(['type' => 'custom', 'custom' => [['challenge' => $text, 'response' => 'answer']]]);
+    ActionTagHelper::$cache = [];
+    $module = new NEDCaptcha2ExternalModule();
+    $response = $module->redcap_module_ajax(
+        'get-params', ['field' => 'nc2_resp'], 355,
+        null, null, null, null, null, null, null, null, null, null, null
+    );
+    check(strpos($response['html'], $text) === false, 'Custom text escaped its textarea');
+    check(strpos($response['html'], htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) !== false, 'Custom text was not HTML encoded');
+    check(strpos($response['params']['custom'], $text) === 0, 'Editable custom text was changed');
+    $checks++;
+
     echo "Passed $checks editor/save-handler regression cases (in-memory metadata/database).\n";
 }
