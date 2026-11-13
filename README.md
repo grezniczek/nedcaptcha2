@@ -208,6 +208,7 @@ For example:
 - The Save & Return Later button is hidden while the CAPTCHA is being presented.
 - Hidden REDCap fields, except the CSRF token and nedCAPTCHA's own temporary client key, are removed from the CAPTCHA form before submission.
 - If custom type is selected without any valid challenge-response pairs, validation falls back to a math CAPTCHA.
+- If CAPTCHA generation or image rendering fails, the module falls back to a plain-text math puzzle so that respondents can still reach the survey.
 - Solved CAPTCHA sessions are disabled by default. When disabled, opening the same public survey in a new tab requires solving the CAPTCHA again.
 - When solved CAPTCHA sessions are enabled, the solved state is stored as an opaque browser cookie backed by server-side session metadata. It applies only to the same browser and the same project public survey.
 

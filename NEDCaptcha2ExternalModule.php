@@ -151,7 +151,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// Get response
 		$response = isset($_POST[$captcha_field]) ? trim("{$_POST[$captcha_field]}") : "";
 		$expected = $stored["expected"];
-		if ($params["type"] == "custom") {
+		$response_type = $stored['type'] ?? $params['type'];
+		if ($response_type == "custom") {
 			if ($params["caseInsensitive"]) {
 				$response = mb_strtolower($response);
 				if ($expected !== null) $expected = mb_strtolower((string)$expected);
@@ -161,7 +162,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$response = strtolower($response);
 		}
 		// Check response
-		$matches = $expected !== null && ($params["type"] === "math"
+		$matches = $expected !== null && ($response_type === "math"
 			? $expected == $response
 			: (string)$expected === $response);
 		$passed = $stored["passed"] || $matches;
@@ -170,9 +171,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$expected = ($passed || $params["reuse"]) ? $stored["expected"] : null;
 
 		$captcha = new CaptchaGenerator($params, $expected);
+		$params['type'] = $captcha->type;
+		if ($captcha->error !== null) {
+			$this->warnings[] = 'The configured CAPTCHA could not be rendered. Using a text math puzzle instead.';
+		}
 		$stored = [
 			"expected" => $captcha->expected,
 			"passed" => $passed,
+			"type" => $captcha->type,
 		];
 		$this->framework->removeLogs("message = ?", $store_key);
 		$this->framework->log($store_key, $stored);

@@ -5,6 +5,7 @@ class CaptchaGenerator
 	public $challenge;
 	public $expected;
 	public $error = null;
+	public $type;
 
 	// Pool of useable characters; optimized for readability
 	const IMAGE_CHARS = "23456789bcdfghjkmnpqrstvwxz";
@@ -15,16 +16,28 @@ class CaptchaGenerator
 	public function __construct($settings, $expected = null) {
 		$this->expected = $expected;
 		$this->font = dirname(dirname(__FILE__))."/fonts/AnonymousPro-Regular.ttf";
-		switch ($settings["type"]) {
-			case "math":
-				$this->math($settings);
-				break;
-			case "image":
-				$this->image($settings);
-				break;
-			case "custom":
-				$this->custom($settings);
-				break;
+		$this->type = $settings['type'];
+		try {
+			switch ($this->type) {
+				case "math": $this->math($settings); break;
+				case "image": $this->image($settings); break;
+				case "custom": $this->custom($settings); break;
+			}
+		}
+		catch (\Throwable $error) {
+			$this->error = $error->getMessage();
+		}
+		if ($this->error !== null || !is_string($this->challenge) || $this->challenge === '') {
+			$this->error = $this->error ?? 'The configured challenge could not be generated.';
+			$this->type = 'math';
+			// This fallback never uses GD, FreeType, the font file, or custom settings.
+			try {
+				$this->math(['complexity' => 'simple', 'minValue' => 1, 'maxValue' => 10, 'showAsText' => true, 'debug' => false]);
+			}
+			catch (\Throwable $error) {
+				$this->challenge = '1 + 1';
+				$this->expected = '2';
+			}
 		}
 	}
 

@@ -108,5 +108,17 @@ namespace {
     check(strpos($captureScript, '</script>') === false && strpos($captureScript, '\\u003C') !== false, 'Captured response is unsafe inside a script');
     check(strpos($captureScript, ').val(') !== false, 'Captured response should be set as a DOM value');
 
+    if (!function_exists('imagecreate')) {
+        SurveyFramework::$logs = [];
+        $module = request(['type' => 'image']);
+        check(property($module, 'active'), 'Rendering failure must still present a usable CAPTCHA');
+        check(SurveyFramework::$logs[$key]['type'] === 'math', 'Effective fallback type was not stored');
+        check(preg_match('/\d+ \+ \d+/', $GLOBALS['Proj']->metadata['captcha']['element_label']) === 1, 'Text fallback challenge missing');
+        $answer = SurveyFramework::$logs[$key]['expected'];
+        $module = request(['type' => 'image'], [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid(), 'captcha' => $answer]);
+        check(isset($GLOBALS['Proj']->metadata['normal']), 'Answering the fallback did not unlock the survey');
+        check($_SERVER['REQUEST_METHOD'] === 'GET', 'Fallback response must not be saved as a survey record');
+    }
+
     echo "Survey hook regressions passed.\n";
 }
