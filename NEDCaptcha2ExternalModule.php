@@ -229,10 +229,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 				if (in_array($this_field, $this->nedcaptcha_fields, true)) continue;
 				// Check for matching challenge
 				foreach ($these_params as $this_param) {
-					if ($this_param[0] == "'" || $this_param[0] == '"') {
-						$this_param = mb_substr($this_param, 1, mb_strlen($this_param) - 2);
+					if (isset($this_param[0]) && $this_param[0] === '"') {
+						$this_param = json_decode($this_param, true);
+						if (!is_string($this_param)) continue;
 					}
-					if ($this_param == $captcha->challenge) {
+					if ($this_param === $captcha->challenge) {
 						$embed[] = $this_field;
 						$this->nedcaptcha_fields[] = $this_field;
 					}

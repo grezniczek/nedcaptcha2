@@ -58,8 +58,8 @@ namespace {
     function property($module, $name) {
         return (new \ReflectionProperty($module, $name))->getValue($module);
     }
-    function request($params, $post = [], $get = []) {
-        Project::$annotations = ['record_id' => '', 'captcha' => '@NEDCAPTCHA=' . json_encode($params), 'normal' => ''];
+    function request($params, $post = [], $get = [], $extraAnnotations = []) {
+        Project::$annotations = ['record_id' => '', 'captcha' => '@NEDCAPTCHA=' . json_encode($params), 'normal' => ''] + $extraAnnotations;
         ActionTagHelper::$cache = [];
         $_POST = $post;
         $_GET = $get + ['s' => 'public-hash'];
@@ -88,6 +88,12 @@ namespace {
     SurveyFramework::$logs[$key] = ['expected' => 'secret', 'passed' => false];
     request(['type' => 'custom', 'caseInsensitive' => true, 'custom' => [['challenge' => 'Key', 'response' => 'Secret']]], [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid(), 'captcha' => 'SECRET']);
     check(SurveyFramework::$logs[$key]['passed'] === true, 'Case-insensitive comparison was lost');
+
+    foreach (['A "quoted" key', 'a\\b', 'Ünicode', '0'] as $challenge) {
+        SurveyFramework::$logs = [];
+        request(['type' => 'custom', 'custom' => [['challenge' => $challenge, 'response' => 'answer']]], [], [], ['embedded' => '@NEDCAPTCHA-CUSTOM-EMBED=' . json_encode($challenge)]);
+        check(isset($GLOBALS['Proj']->metadata['embedded']), 'Escaped custom embedding key did not match');
+    }
 
     echo "Survey hook regressions passed.\n";
 }
