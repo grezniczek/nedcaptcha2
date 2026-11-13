@@ -113,6 +113,20 @@ namespace {
     check(count($response['errors']) > 0 && $GLOBALS['save_query'] === null, 'Missing tag silently saved');
     $checks++;
 
+    // The survey and editor must both keep the default math CAPTCHA for a bare tag.
+    foreach ([true, false] as $withDefaults) {
+        $module = new NEDCaptcha2ExternalModule();
+        $params = $module->validate_params('', $withDefaults);
+        check($params['type'] === 'math', 'Bare tag must use the default math CAPTCHA');
+        $checks++;
+    }
+    // Explicit JSON configurations retain the existing type/default behavior.
+    foreach (['{"type":"math"}' => 'math', '{"type":"image"}' => 'image', '{"type":"none"}' => 'none', '{}' => 'math'] as $json => $type) {
+        $module = new NEDCaptcha2ExternalModule();
+        check($module->validate_params($json, true)['type'] === $type, 'JSON configuration type changed');
+        $checks++;
+    }
+
     // The initial editor selection and the params sent back on a later edit must agree.
     Project::$annotation = '@NEDCAPTCHA';
     ActionTagHelper::$cache = [];
@@ -122,8 +136,8 @@ namespace {
         'get-params', ['field' => 'nc2_resp'], 355,
         null, null, null, null, null, null, null, null, null, null, null
     );
-    check($response['params']['type'] === 'none', 'Bare tag must start disabled');
-    check(preg_match('/<input[^>]*id="type-none"[^>]*checked/', $response['html']) === 1, 'Disabled radio is not selected');
+    check($response['params']['type'] === 'math', 'Bare tag must start with the default math CAPTCHA');
+    check(preg_match('/<input[^>]*id="type-math"[^>]*checked/', $response['html']) === 1, 'Math Problem radio is not selected');
     check($response['errors'] === [] && $response['warnings'] === [], 'Bare tag produced validation messages');
     check($GLOBALS['save_query'] === null, 'Opening the editor must not write metadata');
     $checks++;

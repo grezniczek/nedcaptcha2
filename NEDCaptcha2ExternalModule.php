@@ -393,11 +393,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 			if (count($tagged) == 0) return "ERROR";
 
-			// Start an unconfigured tag with Disabled selected in the editor.
-			$editor_params = $tagged[$field][0] === "" ? ["type" => "none"] : $tagged[$field][0];
-			$params = $this->validate_params($editor_params, false);
+			$params = $this->validate_params($tagged[$field][0], false);
 			unset($params["debug"]);
-			$defaults = $this->validate_params($editor_params, true);
+			$defaults = $this->validate_params($tagged[$field][0], true);
 			unset($defaults["debug"]);
 			$valid_keys = array_keys($defaults);
 			// Convert custom to string
@@ -549,6 +547,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	 * @return array 
 	 */
 	public function validate_params($params, $set_defaults = false) {
+		// A bare setup tag uses the default math CAPTCHA on the survey and in the editor.
+		if ($params === "") $params = ["type" => "math"];
 		if (!is_array($params)) {
 			if ($params == "") $params = "{}";
 			$params = json_decode($params, true);
