@@ -390,6 +390,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	}
 
 	function redcap_module_ajax($action, $payload, $project_id, $record, $instrument, $event_id, $repeat_instance, $survey_hash, $response_id, $survey_queue_hash, $page, $page_full, $user_id, $group_id) {
+		if ($action === 'get-params' || $action === 'set-params') {
+			if (!$project_id) return ["errors" => ["A project is required."], "warnings" => []];
+			$edit_project = new \Project($project_id, true);
+			$edit_error = $this->getConfigurationEditError($project_id, $edit_project);
+			if ($edit_error !== null) return ["errors" => [$edit_error], "warnings" => []];
+		}
 
 		#region get-params
 		if ($action == "get-params") {
@@ -548,6 +554,16 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	private static function encodeJavascriptValue($value) {
 		return json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+	}
+
+	private function getConfigurationEditError($project_id, $project) {
+		if (!$this->framework->isAuthenticated() || !$this->framework->getUser()->hasDesignRights($project_id)) {
+			return "Design rights are required to edit CAPTCHA settings.";
+		}
+		if (!$project->isDevelopment() && !($project->isProduction() && $project->isDraftMode())) {
+			return "Enter editable draft mode before changing CAPTCHA settings in a production project.";
+		}
+		return null;
 	}
 
 	/**
@@ -801,6 +817,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	}
 
 	private function inject_online_designer($project_id, $instrument) {
+		if ($this->getConfigurationEditError($project_id, new \Project($project_id)) !== null) return;
 		// Check for action tags
 		$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], null, [$instrument], null, true)[self::AT_SETUP] ?? [];
 

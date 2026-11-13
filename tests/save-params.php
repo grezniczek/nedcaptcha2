@@ -3,25 +3,37 @@
 // Exercise the real save handler without bootstrapping REDCap or connecting to a database.
 namespace ExternalModules {
     class AbstractExternalModule {
+        public $framework;
+        public function __construct() { $this->framework = new \EditorFramework(); }
         public function getProjectSetting($key) { return false; }
     }
 }
 
 namespace {
+    class EditorFramework {
+        public static $authenticated = true;
+        public static $design = true;
+        public function isAuthenticated() { return self::$authenticated; }
+        public function getUser() { return $this; }
+        public function hasDesignRights($projectId) { return self::$design; }
+    }
     class Project {
         public static $annotation;
         public static $draft = false;
+        public static $status = 0;
         public $metadata;
         public $metadata_temp;
         public $forms = [];
         public $forms_temp = [];
 
-        public function __construct($projectId) {
+        public function __construct($projectId, $forceLoad = false) {
             $this->metadata = ['nc2_resp' => ['misc' => self::$annotation]];
             $this->metadata_temp = $this->metadata;
         }
 
         public function isDraftMode() { return self::$draft; }
+        public function isDevelopment() { return self::$status === 0; }
+        public function isProduction() { return self::$status === 1; }
     }
 
     function db_query($sql, $parameters) {
@@ -205,6 +217,21 @@ namespace {
     check(strpos($response['html'], $text) === false, 'Custom text escaped its textarea');
     check(strpos($response['html'], htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) !== false, 'Custom text was not HTML encoded');
     check(strpos($response['params']['custom'], $text) === 0, 'Editable custom text was changed');
+    $checks++;
+
+    foreach ([[false, true, 0, false], [true, false, 0, false], [true, true, 1, false], [true, true, 2, true]] as [$authenticated, $design, $status, $draft]) {
+        EditorFramework::$authenticated = $authenticated;
+        EditorFramework::$design = $design;
+        Project::$status = $status;
+        $response = save('@NEDCAPTCHA', ['type' => 'none'], $draft);
+        check(count($response['errors']) > 0 && $GLOBALS['save_query'] === null, 'Unauthorized or noneditable project save succeeded');
+        $checks++;
+    }
+    EditorFramework::$authenticated = EditorFramework::$design = true;
+    Project::$status = 1;
+    $response = save('@NEDCAPTCHA', ['type' => 'none'], true);
+    check($response['errors'] === [] && strpos($GLOBALS['save_query'][0], 'redcap_metadata_temp') !== false, 'Production draft save failed');
+    Project::$status = 0;
     $checks++;
 
     echo "Passed $checks editor/save-handler regression cases (in-memory metadata/database).\n";
