@@ -393,9 +393,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 			if (count($tagged) == 0) return "ERROR";
 
-			$params = $this->validate_params($tagged[$field][0], false);
+			// Start an unconfigured tag with Disabled selected in the editor.
+			$editor_params = $tagged[$field][0] === "" ? ["type" => "none"] : $tagged[$field][0];
+			$params = $this->validate_params($editor_params, false);
 			unset($params["debug"]);
-			$defaults = $this->validate_params($tagged[$field][0], true);
+			$defaults = $this->validate_params($editor_params, true);
 			unset($defaults["debug"]);
 			$valid_keys = array_keys($defaults);
 			// Convert custom to string
@@ -484,14 +486,21 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			// Get current annotations
 			$Proj = new \Project($project_id);
 			$misc_current = $Proj->isDraftMode() 
-				? $Proj->metadata_temp[$field]["misc"]
-				: $Proj->metadata[$field]["misc"];
-			// Replace
-			$pattern = '/^' . preg_quote(self::AT_SETUP, '/') . '\s*=\s*' . preg_quote($tagged[$field][0], '/') . '/m';
+				? ($Proj->metadata_temp[$field]["misc"] ?? "")
+				: ($Proj->metadata[$field]["misc"] ?? "");
+			// Replace the first parsed setup tag, including a tag without parameters.
+			$setup_tags = ActionTagHelper::parseActionTags($misc_current, self::AT_SETUP);
+			if (empty($setup_tags)) {
+				return [
+					"errors" => ["The @NEDCAPTCHA action tag could not be found. Please reload the page and try again."],
+					"warnings" => [],
+				];
+			}
+			$setup_tag = $setup_tags[0];
 			$replacement = self::AT_SETUP."=".json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-			$misc_new = preg_replace($pattern, $replacement, $misc_current);
+			$misc_new = substr_replace($misc_current, $replacement, $setup_tag["offset"], strlen($setup_tag["match"]));
 			// Store
-			$table_name = $Proj->isDraftMode() ? "redcap_metadata_draft" : "redcap_metadata";
+			$table_name = $Proj->isDraftMode() ? "redcap_metadata_temp" : "redcap_metadata";
 			$sql = "UPDATE $table_name SET misc = ? WHERE field_name = ? AND project_id = ?";
 			$q = db_query($sql, [$misc_new, $field, $project_id]);
 			if ($q) {

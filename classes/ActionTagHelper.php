@@ -115,7 +115,7 @@ class ActionTagHelper
      *
      * @param $string           The string to be parsed for actiontags (in the format of <code>@FOO=BAR or @FOO={"param":"bar"}</code>
      * @param null $tag_only    If you wish to select a single tag
-     * @return array|bool       returns the match array with the key equal to the tag and an array containing keys of 'params, params_json and params_text'
+     * @return array|bool       Parsed tags with actiontag, params, matched text, and byte offset; false if none are found.
      */
     static function parseActionTags($string, $tag_only = null) {
         $re = "/(?(DEFINE)
@@ -144,7 +144,7 @@ class ActionTagHelper
           )
         )?/ixm";
 
-        preg_match_all($re, $string, $matches);
+        preg_match_all($re, $string, $matches, PREG_OFFSET_CAPTURE);
 
         // Return false if none are found
         if (count($matches['actiontag']) == 0) return false;
@@ -152,12 +152,13 @@ class ActionTagHelper
         $results = array();
 
         foreach ($matches['actiontag'] as $i => $tag) {
-            $tag = strtoupper($tag);
+            $tag = strtoupper($tag[0]);
             if ($tag_only && ($tag != strtoupper($tag_only))) continue;
             $results[] = array(
                 'actiontag' => $tag,
-                'params' => $matches['params'][$i],
-                'match' => $matches[0],
+                'params' => $matches['params'][$i][0],
+                'match' => $matches[0][$i][0],
+                'offset' => $matches[0][$i][1],
             );
         }
         return $results;

@@ -51,6 +51,8 @@ Project-level settings:
 
 All CAPTCHA behavior is configured through the `@NEDCAPTCHA` action tag. In the Online Designer, click the `@NEDCAPTCHA` action tag on the field list to open the nedCAPTCHA Editor. Manual JSON editing is possible, but the editor is the recommended way to maintain settings. The JSON configuration format is described by [schema/nedcaptcha-action-tag.schema.json](schema/nedcaptcha-action-tag.schema.json).
 
+A bare `@NEDCAPTCHA` action tag opens the editor with **Disabled** selected.
+
 ![Opening the nedCAPTCHA Editor from the Online Designer](images/gui-trigger.png)
 
 ![nedCAPTCHA Editor dialog](images/gui-dialog.png)
