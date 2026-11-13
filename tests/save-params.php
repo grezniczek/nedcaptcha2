@@ -10,6 +10,10 @@ namespace ExternalModules {
 }
 
 namespace {
+    class REDCap {
+        public static $events = [];
+        public static function logEvent(...$arguments) { self::$events[] = $arguments; }
+    }
     class EditorFramework {
         public static $authenticated = true;
         public static $design = true;
@@ -38,7 +42,7 @@ namespace {
 
     function db_query($sql, $parameters) {
         $GLOBALS['save_query'] = [$sql, $parameters];
-        return true;
+        return $GLOBALS['save_query_succeeds'] ?? true;
     }
 
     require_once __DIR__ . '/../classes/Color.php';
@@ -232,6 +236,22 @@ namespace {
     $response = save('@NEDCAPTCHA', ['type' => 'none'], true);
     check($response['errors'] === [] && strpos($GLOBALS['save_query'][0], 'redcap_metadata_temp') !== false, 'Production draft save failed');
     Project::$status = 0;
+    $checks++;
+
+    REDCap::$events = [];
+    save('@NEDCAPTCHA={"type":"math"}', ['type' => 'none']);
+    check(count(REDCap::$events) === 1 && REDCap::$events[0][5] === 355, 'Configuration audit event missing or in wrong project');
+    check(strpos(REDCap::$events[0][1], 'before = {"type":"math"}') !== false && strpos(REDCap::$events[0][1], 'after = {"type":"none"}') !== false, 'Audit before/after missing');
+    $old = '@NEDCAPTCHA={"type":"custom","custom":[{"challenge":"Key","response":"old-secret"}]}';
+    save($old, ['type' => 'custom', 'custom' => 'Key=new-secret']);
+    $event = REDCap::$events[1][1];
+    check(strpos($event, 'old-secret') === false && strpos($event, 'new-secret') === false && strpos($event, '[REDACTED]') !== false, 'Audit event exposed an access key');
+    $eventCount = count(REDCap::$events);
+    save('@NEDCAPTCHA=' . json_encode(['type' => 'none'], JSON_PRETTY_PRINT), ['type' => 'none']);
+    $GLOBALS['save_query_succeeds'] = false;
+    save('@NEDCAPTCHA', ['type' => 'none']);
+    $GLOBALS['save_query_succeeds'] = true;
+    check(count(REDCap::$events) === $eventCount, 'Failed/unchanged save should not log an update');
     $checks++;
 
     echo "Passed $checks editor/save-handler regression cases (in-memory metadata/database).\n";

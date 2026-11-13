@@ -514,6 +514,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$sql = "UPDATE $table_name SET misc = ? WHERE field_name = ? AND project_id = ?";
 			$q = db_query($sql, [$misc_new, $field, $project_id]);
 			if ($q) {
+				if ($misc_new !== $misc_current) {
+					$changes = "field_name = $field\nmetadata_table = $table_name\n"
+						. "before = " . self::configurationAuditValue($tagged[$field][0]) . "\n"
+						. "after = " . self::configurationAuditValue($params);
+					\REDCap::logEvent('Update nedCAPTCHA configuration', $changes, null, null, null, $project_id);
+				}
 				return [ "errors" => [], "warnings" => [] ];
 			}
 			else {
@@ -554,6 +560,23 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	private static function encodeJavascriptValue($value) {
 		return json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+	}
+
+	private static function configurationAuditValue($params) {
+		if ($params === '') $params = ['type' => 'math'];
+		if (!is_array($params)) $params = json_decode($params, true);
+		if (!is_array($params)) return '[invalid parameters]';
+		// Custom responses can be access keys. Never expose them to project-log readers.
+		if (isset($params['custom'])) {
+			if (is_array($params['custom'])) {
+				foreach ($params['custom'] as &$pair) {
+					$pair = is_array($pair) ? array_merge($pair, ['response' => '[REDACTED]']) : '[invalid pair]';
+				}
+				unset($pair);
+			}
+			else $params['custom'] = '[invalid pairs]';
+		}
+		return json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 	}
 
 	private function getConfigurationEditError($project_id, $project) {
