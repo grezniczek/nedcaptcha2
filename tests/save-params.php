@@ -185,6 +185,15 @@ namespace {
     check($response['params']['type'] === 'image', 'Configured type must be preserved');
     $checks++;
 
+    $response = save('@NEDCAPTCHA', ['type' => 'math', 'minValue' => 20, 'maxValue' => 10]);
+    check(count($response['warnings']) > 0 && $GLOBALS['save_query'] === null, 'Inverted operand range was saved');
+    $module = new NEDCaptcha2ExternalModule();
+    $params = $module->validate_params(['type' => 'math', 'minValue' => 20, 'maxValue' => 10, 'showAsText' => true], true);
+    check($params['minValue'] === 1 && $params['maxValue'] === 10, 'Existing inverted ranges were not normalized');
+    $generator = new \DE\RUB\SEG\NEDCaptcha2ExternalModule\CaptchaGenerator($params);
+    check(!empty($generator->challenge), 'Normalized math configuration is not usable');
+    $checks++;
+
     $text = '</textarea><script>window.audit = true</script>&"';
     Project::$annotation = '@NEDCAPTCHA=' . json_encode(['type' => 'custom', 'custom' => [['challenge' => $text, 'response' => 'answer']]]);
     ActionTagHelper::$cache = [];

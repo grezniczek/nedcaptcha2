@@ -606,6 +606,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$full["maxValue"] = max(intval($params["maxValue"] ?? 10), 1);
 		// minValue (positive int, default 1)
 		$full["minValue"] = max(1, intval($params["minValue"] ?? 1));
+		if ($full["minValue"] > $full["maxValue"]) {
+			$this->warnings[] = "Minimum operand value must not exceed the maximum. Defaulting to 1 through 10.";
+			$full["minValue"] = 1;
+			$full["maxValue"] = 10;
+		}
 		// noiseColor
 		$full["noiseColor"] = Color::Parse($params["noiseColor"] ?? "#333333");
 		// noiseDensity (off/low/medium/high, default medium)
