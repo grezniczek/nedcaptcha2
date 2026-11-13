@@ -58,7 +58,7 @@ namespace {
         '@HIDDEN-FORM @NEDCAPTCHA @HIDDEN-PDF',
         "@HIDDEN-FORM\n  @NEDCAPTCHA={\n    \"type\": \"math\"\n}\n@HIDDEN-PDF",
         '@NEDCAPTCHA-INSTRUCTIONS @NEDCAPTCHA={"type":"math"}',
-        '@nedCAPTCHA={"type":"math"}',
+        '@nedCAPTCHA={"type":"image"} @NEDCAPTCHA={"type":"math"}',
         'Text with ünicode before @NEDCAPTCHA',
     ];
     $checks = 0;
@@ -77,6 +77,39 @@ namespace {
             $checks++;
         }
     }
+
+    // Mixed/lowercase names must not activate the module or permit editor saves.
+    foreach (['@nedCAPTCHA', '@nedcaptcha', '@NedCaptcha'] as $annotation) {
+        $response = save($annotation, ['type' => 'none']);
+        check(count($response['errors']) > 0 && $GLOBALS['save_query'] === null, 'Wrong-case tag was saved');
+        $module = new NEDCaptcha2ExternalModule();
+        $response = $module->redcap_module_ajax(
+            'get-params', ['field' => 'nc2_resp'], 355,
+            null, null, null, null, null, null, null, null, null, null, null
+        );
+        check($response === 'ERROR', 'Wrong-case tag opened the editor');
+        check(ActionTagHelper::parseActionTags($annotation, '@NEDCAPTCHA') === [], 'Tag filter ignored case');
+        $checks++;
+    }
+
+    // All module tags use exact names, including helper tags used by the survey.
+    $names = ['@NEDCAPTCHA', '@NEDCAPTCHA-INSTRUCTIONS', '@NEDCAPTCHA-FAILMESSAGE', '@NEDCAPTCHA-DISPLAY', '@NEDCAPTCHA-CUSTOM-CHALLENGE', '@NEDCAPTCHA-CUSTOM-EMBED'];
+    Project::$annotation = implode(' ', array_merge($names, array_map('strtolower', $names)));
+    ActionTagHelper::$cache = [];
+    $tags = ActionTagHelper::getActionTags(355, $names, 'nc2_resp');
+    check(array_keys($tags) === $names, 'Recognized tag names changed');
+    foreach ($names as $name) check(count($tags[$name]['nc2_resp']) === 1, 'Wrong-case helper tag was recognized');
+    $checks++;
+
+    Project::$annotation = 'No action tags here';
+    ActionTagHelper::$cache = [];
+    check(ActionTagHelper::getActionTags(355, $names, 'nc2_resp') === [], 'Untagged field was recognized');
+    $checks++;
+
+    // Case-sensitive matching must still parse uppercase hexadecimal Unicode escapes in JSON.
+    $tags = ActionTagHelper::parseActionTags('@NEDCAPTCHA={"type":"custom","custom":[{"challenge":"\\uABCD","response":"Case"}]}', '@NEDCAPTCHA');
+    check(json_decode($tags[0]['params'], true)['custom'][0]['challenge'] === json_decode('"\\uABCD"'), 'Unicode escape was not parsed');
+    $checks++;
 
     // Custom challenge text must not be interpreted as regex replacement backreferences.
     $custom = 'Price $1 / \\1';

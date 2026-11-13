@@ -1,7 +1,12 @@
 {
+  "scripts": {
+    "test": "php tests/save-params.php && node tests/editor.cjs"
+  },
   "devDependencies": {
     "@types/bootstrap": "^5.2.10",
     "@types/jquery": "^3.5.32",
-    "@types/jqueryui": "^1.12.24"
+    "@types/jqueryui": "^1.12.24",
+    "jquery": "^3.7.1",
+    "jsdom": "^22.1.0"
   }
 }

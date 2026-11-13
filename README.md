@@ -69,6 +69,8 @@ The `@NEDCAPTCHA` field and other nedCAPTCHA helper fields are removed from norm
 
 ## Action Tags
 
+All nedCAPTCHA action tags are case-sensitive and must use the uppercase names shown below.
+
 ### `@NEDCAPTCHA`
 
 Required to protect a public survey. Add it to one Text Box field without validation on the first survey page. The action tag accepts a JSON object containing the CAPTCHA configuration.

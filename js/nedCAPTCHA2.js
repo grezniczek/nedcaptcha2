@@ -19,8 +19,6 @@ let editing = false;
 
 const hooks = {};
 
-const toasts = [];
-
 //#endregion
 
 /**
@@ -66,7 +64,7 @@ function addLink(fieldName) {
 	$ats.each(function() {
 		const orig = $(this).html();
 		const regex = new RegExp(
-			config.at.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?!-)'
+			config.at.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_-])'
 		);
 		$(this).html(orig.replace(regex, '<a class="nedCAPTCHA-OD-link" data-bs-toggle="tooltip" title="'+config.linkTitle+'" href="javascript:' + NS_PREFIX + EM_NAME + '.edit(\'' + fieldName + '\');">' + config.at.replace('@', '<span class="nedCAPTCHA-OD-accent">@</span>') + '</a>'));
 		$(this).find('a.nedCAPTCHA-OD-link').each(function() {
@@ -77,7 +75,7 @@ function addLink(fieldName) {
 
 function edit(field) {
 	if (editing) return;
-	$('#nedCAPTCHA-OD-editor').html('');
+	$('#nedCAPTCHA-OD-editor').off('.nedCAPTCHA').html('');
 	editing = true;
 	log('Editing ' + field);
 	config.JSMO.ajax('get-params', { 'field': field })
@@ -86,11 +84,11 @@ function edit(field) {
 		$('#nedCAPTCHA-OD-editor')
 			.html(data.html)
 			// Outputs
-			.on('input', 'input.text-output', function() {
+			.on('input.nedCAPTCHA', 'input.text-output', function() {
 				$(this).next('output').text(this.value);
 			})
 			// Update preview
-			.on('input', 'input.form-control-color', function() {
+			.on('input.nedCAPTCHA', 'input.form-control-color', function() {
 				const name = $(this).attr('name');
 				const varname = '--' + name;
 				$('svg.nedCAPTCHA-preview').css(varname, $(this).val());
@@ -98,9 +96,10 @@ function edit(field) {
 		$('#nedCAPTCHA-OD-editor input.form-control-color').trigger('input');
 		$('#nedCAPTCHA-OD-editor input.text-output').trigger('input');
 		let dirty = false;
+		let saving = false;
+		let closed = false;
 		const close = function() {
 			editing = false;
-			toasts.forEach(t => $('#'+t).remove());
 			$('#nedCAPTCHA-OD-editor').dialog('close');
 		};
 		// Show dialog
@@ -118,27 +117,32 @@ function edit(field) {
 				{
 					text: config.updateLabel,
 					click: function() {
+						if (saving) return;
 						if (dirty) {
+							saving = true;
 							config.JSMO.ajax('set-params', { 'field': field, 'params': data.params })
 							.then(function(response) {
+								if (closed) return;
 								log('Update result:', response);
 								if (response.errors.length) {
-									const errors = '<ul>' + response.errors.map(err => '<li>' + err + '</li>').join('') + '</ul><i>Please try again after reloading the page.</i>';
-									toasts.push(showToast("nedCAPTCHA ERROR", errors, "error"));
+									showNotice('nedCAPTCHA ERROR', [...response.errors, 'Please try again after reloading the page.'], 'danger');
 									return;
 								}
 								if (response.warnings.length) {
-									const warnings = '<ul>' + response.warnings.map(w => '<li>' + w + '</li>').join('') + '</ul><i>Please fix the issues and try again.</i>';
-									toasts.push(showToast("nedCAPTCHA WARNING", warnings, "error"));
+									showNotice('nedCAPTCHA WARNING', [...response.warnings, 'Please fix the issues and try again.'], 'warning');
 									return;
 								}
 								// Success
-								showToast("SUCCESS", "nedCAPTCHA configuration has been updated", "success", 1000);
 								close();
+								showNotice('SUCCESS', ['nedCAPTCHA configuration has been updated'], 'success');
 							})
 							.catch(function(err) {
 								log(err);
-								showToast("nedCAPTCHA ERROR", 'An unknown error occured.', "error");
+								if (closed) return;
+								showNotice('nedCAPTCHA ERROR', ['An unknown error occurred. Please try again.'], 'danger');
+							})
+							.finally(function() {
+								saving = false;
 							});
 						}
 						else {
@@ -148,7 +152,7 @@ function edit(field) {
 				}
 			],
 			open: function() {
-				$('#nedCAPTCHA-OD-editor').on('input', function(e) {
+				$('#nedCAPTCHA-OD-editor').on('input.nedCAPTCHA', function(e) {
 					const $el = $(e.target);
 					const name = $el.attr('name') ?? '?';
 					const val = $el.is(':checkbox') ? $el.is(':checked') : $el.val();
@@ -160,8 +164,9 @@ function edit(field) {
 				});
 			},
 			close: function() {
+				closed = true;
 				editing = false;
-				$('#nedCAPTCHA-OD-editor').html('');
+				$('#nedCAPTCHA-OD-editor').off('.nedCAPTCHA').html('');
 				$('#nedCAPTCHA-OD-editor').dialog('destroy');
 			}
 		
@@ -171,6 +176,37 @@ function edit(field) {
 		log('Error', err);
 		editing = false;
 	});
+}
+
+/**
+ * Display module-owned feedback without Bootstrap's animated toast lifecycle.
+ * Messages are inserted as text, including messages received from the server.
+ */
+function showNotice(title, messages, type) {
+	const $notice = $('<div class="nedCAPTCHA-OD-notice alert"></div>')
+		.addClass('alert-' + type)
+		.attr('role', type === 'success' ? 'status' : 'alert');
+	$('<strong></strong>').text(title).appendTo($notice);
+	const $messages = $('<ul class="mb-0"></ul>').appendTo($notice);
+	messages.forEach(message => $('<li></li>').text(message).appendTo($messages));
+	let timer;
+	$('<button type="button" class="btn-close" aria-label="Close"></button>')
+		.on('click', function() {
+			clearTimeout(timer);
+			$notice.remove();
+		})
+		.appendTo($notice);
+	if (type === 'success') {
+		$('.nedCAPTCHA-OD-notice-success').remove();
+		$notice.addClass('nedCAPTCHA-OD-notice-success').appendTo('body');
+		timer = setTimeout(() => $notice.remove(), 3000);
+	}
+	else {
+		const $editor = $('#nedCAPTCHA-OD-editor');
+		$editor.children('.nedCAPTCHA-OD-notice').remove();
+		$notice.prependTo($editor);
+		$editor.scrollTop(0);
+	}
 }
 
 

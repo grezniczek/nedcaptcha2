@@ -34,10 +34,9 @@ class ActionTagHelper
             return self::$cache[$arg_key];
         }
 
-        // Convert tag_filter into uppercase array
+        // Preserve case: callers must use the exact action-tag name.
         if (!empty($tags)) {
             if (!is_array($tags)) $tags = array($tags);
-            $tags = array_map('strtoupper', $tags);
         }
         $Proj = new \Project($project_id);
         $metadata = ($tryDraftMode && $Proj->isDraftMode()) ? $Proj->metadata_temp : $Proj->metadata;
@@ -61,14 +60,13 @@ class ActionTagHelper
             if (is_array($context) && strpos($field_annotation, "@IF") !== false) {
                 $field_annotation = \Form::replaceIfActionTag($field_annotation, $context['project_id'] ?? null, $context['record'] ?? null, $context['event_id'] ?? null, $context['instrument'] ?? null, $context['instance'] ?? 1);
             }
-            $parsed_tags = self::parseActionTags($field_annotation);
+            $parsed_tags = self::parseActionTags($field_annotation) ?: [];
             // Plugin::log($tags, "DEBUG", "TAGS for $field_name");
             foreach ($parsed_tags as $tag) {
-                // All action-tags should be parsed as uppercase
-                $action_tag = strtoupper($tag['actiontag']);
+                $action_tag = $tag['actiontag'];
 
                 // If we are filtering, skip non-specified tags
-                if ($tags AND !in_array($action_tag, $tags)) continue;
+                if ($tags AND !in_array($action_tag, $tags, true)) continue;
 
                 // Initialize the action_tag node
                 if (!isset($action_tags[$action_tag])) $action_tags[$action_tag] = array();
@@ -121,7 +119,7 @@ class ActionTagHelper
         $re = "/(?(DEFINE)
           (?<number>    -?  (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)? )
           (?<boolean>   true | false | null )
-          (?<string>    \" ([^\"\\\\]* | \\\\ [\"\\\\bfnrt\/] | \\\\ u [0-9a-f]{4} )* \" )
+          (?<string>    \" ([^\"\\\\]* | \\\\ [\"\\\\bfnrt\/] | \\\\ u [0-9a-fA-F]{4} )* \" )
           (?<array>     \[  (?:  (?&json)  (?: , (?&json)  )*  )?  \s* \] )
           (?<pair>      \s* (?&string) \s* : (?&json)  )
           (?<object>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )?  \s* \} )
@@ -142,7 +140,7 @@ class ActionTagHelper
               (?'match_string'(?:[[:alnum:]\_\-]+))
             )
           )
-        )?/ixm";
+        )?/xm";
 
         preg_match_all($re, $string, $matches, PREG_OFFSET_CAPTURE);
 
@@ -152,8 +150,8 @@ class ActionTagHelper
         $results = array();
 
         foreach ($matches['actiontag'] as $i => $tag) {
-            $tag = strtoupper($tag[0]);
-            if ($tag_only && ($tag != strtoupper($tag_only))) continue;
+            $tag = $tag[0];
+            if ($tag_only && $tag !== $tag_only) continue;
             $results[] = array(
                 'actiontag' => $tag,
                 'params' => $matches['params'][$i][0],
