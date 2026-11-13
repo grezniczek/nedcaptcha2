@@ -78,8 +78,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($sh == $psh && isset($_POST["__start_time__"])) return;
 
 		// Load previous state (if any)
-		$client_key = isset($_POST[self::CLIENT_KEY]) 
-			? $_POST[self::CLIENT_KEY] : \Crypto::getGuid();
+		$client_key = $_POST[self::CLIENT_KEY] ?? null;
+		if (!is_string($client_key) || !preg_match('/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $client_key)) {
+			$client_key = \Crypto::getGuid();
+		}
 		$store_key = self::STORE_KEY."{$psh}_{$client_key}";
 		$result = $this->queryLogs("SELECT expected, passed WHERE message = ?", $store_key);
 		$stored = $result->fetch_assoc() ?? [ "expected" => null, "passed" => false ];
@@ -189,19 +191,19 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$this->warnings = [];
 			if ($params["capture"]) {
 				// Capture the response
-				$this->scripts_regular[] = "$('form#form').append($('<input name=\"{$captcha_field}\" value=\"{$response}\" type=\"hidden\">'));";
+				$this->scripts_regular[] = "$('<input>', {type: 'hidden', name: " . self::encodeJavascriptValue($captcha_field) . "}).val(" . self::encodeJavascriptValue($response) . ").appendTo('form#form');";
 			}
 			if ($params["debug"]) {
 				$this->scripts_top[] = "console.log('nedCAPTCHA 2: CAPTCHA passed.');";
 				if ($params["capture"]) {
-					$this->scripts_top[] = "console.log('nedCAPTCHA 2: Response captured: {$response}');";
+					$this->scripts_top[] = "console.log('nedCAPTCHA 2: Response captured:', " . self::encodeJavascriptValue($response) . ");";
 				}
 			}
 			return;
 		}
 
 		// Add client key to form
-		$this->scripts_delayed[] = "$('input[name=\"redcap_csrf_token\"]').after($('<input type=\"hidden\" name=\"".self::CLIENT_KEY."\" value=\"$client_key\">'));";
+		$this->scripts_delayed[] = "$('<input>', {type: 'hidden', name: " . self::encodeJavascriptValue(self::CLIENT_KEY) . "}).val(" . self::encodeJavascriptValue($client_key) . ").insertAfter($('input[name=\"redcap_csrf_token\"]'));";
 
 		// Setup the CAPTCHA for display
 		if ($params["type"] == "math") {
@@ -241,8 +243,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 		}
 		// Add the CAPTCHA to the label and then move it in front of the input
+		$challenge_html = $params["type"] === "custom" ? $this->framework->escape($captcha->challenge) : $captcha->challenge;
 		$Proj->metadata[$captcha_field]["element_label"] .= 
-			"<div class=\"nedcaptcha2-challenge\" data-target=\"$captcha_field\">{$captcha->challenge}</div>";
+			"<div class=\"nedcaptcha2-challenge\" data-target=\"$captcha_field\">{$challenge_html}</div>";
 		$this->scripts_regular[] = "$('input[name=\"{$captcha_field}\"]').before($('div.nedcaptcha2-challenge[data-target=\"{$captcha_field}\"]'));";
 
 		// Move any fields to be embedded for custom challanges
@@ -542,6 +545,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	#endregion
 
 	#region Private Methods
+
+	private static function encodeJavascriptValue($value) {
+		return json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+	}
 
 	/**
 	 * Validate parameters

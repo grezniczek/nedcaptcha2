@@ -17,6 +17,7 @@ namespace {
         public static $logs = [];
         public function getPublicSurveyHash($projectId) { return 'public-hash'; }
         public function getJavascriptModuleObjectName() { return 'surveyModule'; }
+        public function escape($value) { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
         public function queryLogs($sql, $key) { return new SurveyResult(self::$logs[$key] ?? null); }
         public function removeLogs($sql, $key) { unset(self::$logs[$key]); }
         public function log($key, $data) { self::$logs[$key] = $data; }
@@ -94,6 +95,18 @@ namespace {
         request(['type' => 'custom', 'custom' => [['challenge' => $challenge, 'response' => 'answer']]], [], [], ['embedded' => '@NEDCAPTCHA-CUSTOM-EMBED=' . json_encode($challenge)]);
         check(isset($GLOBALS['Proj']->metadata['embedded']), 'Escaped custom embedding key did not match');
     }
+
+    SurveyFramework::$logs = [];
+    $unsafe = '\'"></script><script>window.audit=true</script>&';
+    $module = request($custom, [NEDCaptcha2ExternalModule::CLIENT_KEY => $unsafe]);
+    check(strpos(implode("\n", property($module, 'scripts_delayed')), $unsafe) === false, 'Unsafe client key reached survey JavaScript');
+    $module = request(['type' => 'custom', 'custom' => [['challenge' => $unsafe, 'response' => 'answer']]]);
+    check(strpos($GLOBALS['Proj']->metadata['captcha']['element_label'], '<script>') === false, 'Custom challenge injected survey markup');
+    SurveyFramework::$logs[$key] = ['expected' => $unsafe, 'passed' => false];
+    $module = request(['type' => 'custom', 'capture' => true, 'custom' => [['challenge' => 'Key', 'response' => $unsafe]]], [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid(), 'captcha' => $unsafe]);
+    $captureScript = implode("\n", property($module, 'scripts_regular'));
+    check(strpos($captureScript, '</script>') === false && strpos($captureScript, '\\u003C') !== false, 'Captured response is unsafe inside a script');
+    check(strpos($captureScript, ').val(') !== false, 'Captured response should be set as a DOM value');
 
     echo "Survey hook regressions passed.\n";
 }
