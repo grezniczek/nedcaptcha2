@@ -174,3 +174,24 @@ test('duplicate updates and replies to a closed dialog do not disrupt a new edit
     assert.ok(f.editor().data('dialog-options'));
     assert.equal(f.$('.nedCAPTCHA-OD-notice').length, 0);
 });
+
+test('edits made during a save stay open and can be saved in a second request', async t => {
+    const f = await fixture(t);
+    await f.open();
+    f.change('none');
+    let finish;
+    f.state.result = new Promise(resolve => { finish = resolve; });
+    f.update();
+    f.change('image');
+    finish({ errors: [], warnings: [] });
+    await tick();
+    assert.equal(f.state.requests.at(-1).payload.params.type, 'none');
+    assert.ok(f.editor().data('dialog-options'));
+    assert.equal(f.state.loaded.at(-1).params.type, 'image');
+    assert.match(f.editor().find('.alert-info').text(), /later changes are still unsaved/);
+    f.state.result = { errors: [], warnings: [] };
+    f.update();
+    await tick();
+    assert.equal(f.state.requests.at(-1).payload.params.type, 'image');
+    assert.equal(f.editor().data('dialog-options'), undefined);
+});

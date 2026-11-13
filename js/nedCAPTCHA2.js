@@ -96,6 +96,7 @@ function edit(field) {
 		$('#nedCAPTCHA-OD-editor input.form-control-color').trigger('input');
 		$('#nedCAPTCHA-OD-editor input.text-output').trigger('input');
 		let dirty = false;
+		let revision = 0;
 		let saving = false;
 		let closed = false;
 		const close = function() {
@@ -120,7 +121,9 @@ function edit(field) {
 						if (saving) return;
 						if (dirty) {
 							saving = true;
-							config.JSMO.ajax('set-params', { 'field': field, 'params': data.params })
+							const submittedRevision = revision;
+							const submittedParams = JSON.parse(JSON.stringify(data.params));
+							config.JSMO.ajax('set-params', { 'field': field, 'params': submittedParams })
 							.then(function(response) {
 								if (closed) return;
 								log('Update result:', response);
@@ -133,6 +136,11 @@ function edit(field) {
 									return;
 								}
 								// Success
+								if (revision !== submittedRevision) {
+									showNotice('Saved', ['The submitted settings were saved. Your later changes are still unsaved; click Update again to save them.'], 'info');
+									return;
+								}
+								dirty = false;
 								close();
 								showNotice('SUCCESS', ['nedCAPTCHA configuration has been updated'], 'success');
 							})
@@ -158,6 +166,7 @@ function edit(field) {
 					const val = $el.is(':checkbox') ? $el.is(':checked') : $el.val();
 					if (data.keys.includes(name)) {
 						data.params[name] = val;
+							revision++;
 					} 
 					dirty = true;
 					log('Updated', name, val);
