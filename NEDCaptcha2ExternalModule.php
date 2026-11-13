@@ -215,7 +215,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 		else if ($params["type"] == "custom") {
 			// Apply AT_CUSTOMCHALLENGE action tag
-			foreach ($tagged[self::AT_CUSTOMCHALLENGE] as $this_field => $_) {
+			foreach ($tagged[self::AT_CUSTOMCHALLENGE] ?? [] as $this_field => $_) {
 				if (in_array($this_field, $this->nedcaptcha_fields, true)) {
 					$this->scripts_delayed[] = "$('input[name=\"{$this_field}\"]').val(".json_encode($captcha->challenge)."); doBranching('$this_field');";
 				}
