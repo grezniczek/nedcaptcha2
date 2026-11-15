@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "php tests/save-params.php && php tests/survey.php && php -d disable_functions=imagecreate tests/survey.php && php -d disable_functions=imagecreate tests/fallback.php && php -d disable_functions=imagecreate,mt_rand tests/fallback.php && node tests/editor.cjs"
+    "test": "php tests/save-params.php && php tests/survey.php && php tests/pagination.php && php -d disable_functions=imagecreate tests/survey.php && php -d disable_functions=imagecreate tests/fallback.php && php -d disable_functions=imagecreate,mt_rand tests/fallback.php && node tests/editor.cjs"
   },
   "devDependencies": {
     "@types/bootstrap": "^5.2.10",

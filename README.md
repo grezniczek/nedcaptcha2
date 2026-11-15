@@ -155,7 +155,7 @@ This tag may be used on multiple fields.
 ### Common Options
 
 - **CAPTCHA Type:** `math`, `image`, `custom`, or `none`.
-- **Capture response:** When enabled, the submitted CAPTCHA response is stored in the `@NEDCAPTCHA` field. By default, responses are not captured.
+- **Capture response:** When enabled, the verified CAPTCHA response is stored in the `@NEDCAPTCHA` field when the first survey submission is saved, including Save & Return Later. The response is kept server-side until saving. By default, responses are not captured.
 
 ### Math Problem
 
@@ -217,6 +217,7 @@ For example:
 - The Save & Return Later button is hidden while the CAPTCHA is being presented.
 - Hidden REDCap fields, except the CSRF token and nedCAPTCHA's own temporary client key, are removed from the CAPTCHA form before submission.
 - CAPTCHA proof is bound to the browser's REDCap survey session, expires after two hours, and is consumed through the save-record hook when the first survey submission is saved. The proof expires from challenge issuance, rather than from the last edit to the survey form. Later pages and resumed responses rely on REDCap's response hashes, private survey links, and return-code authentication.
+- After the CAPTCHA is solved, helper fields are excluded consistently from the displayed survey, submissions, and Save & Return requests so that page numbering stays the same. Captured responses are saved separately through REDCap's data API; a capture failure is logged without interrupting the survey save.
 - If custom type is selected without any valid challenge-response pairs, validation falls back to a math CAPTCHA.
 - If CAPTCHA generation or image rendering fails, the module falls back to a plain-text math puzzle so that respondents can still reach the survey.
 - Solved CAPTCHA sessions are disabled by default. When disabled, opening the same public survey in a new tab requires solving the CAPTCHA again.
@@ -226,7 +227,6 @@ For example:
 
 The unreleased changes still have the following issues requiring correction before release:
 
-- A CAPTCHA-only first section can produce different page numbering when the form is displayed and when its first submission is processed. This can discard first-page answers or repeat/skip pages; the bundled multi-page demo also uses a separate CAPTCHA section.
 - If the challenge proof expires or the survey session is lost before the first submission, the gate clears the submitted answers and presents a new CAPTCHA. This also affects a first-page Save & Return request; submitted answers are not buffered for later recovery.
 - If editor access is refused while loading settings, such as after a change to draft mode or design rights, the server error is not displayed and the editor can open empty.
 
@@ -234,13 +234,15 @@ The unreleased changes still have the following issues requiring correction befo
 
 Install JavaScript test dependencies with `npm ci`, then run `npm test`. PHP and Node.js 18 or newer are needed for these checks; Node.js and the npm packages are not runtime dependencies of the external module.
 
-The suite covers editor saves and notices, in-memory survey-hook requests, and text-math fallback with image creation disabled, including a final fallback when random-number generation is disabled. The survey doubles use a single-page layout and do not execute REDCap's full save, pagination, or Save & Return pipeline; passing this suite does not establish compatibility with those flows.
+The suite covers editor saves and notices, in-memory survey-hook requests, and text-math fallback with image creation disabled, including a final fallback when random-number generation is disabled. Pagination regressions cover separate/shared CAPTCHA sections, Next/Previous, validation redisplay, Save & Return from either page, return-code continuation, optional response capture, repeating instances, and capture failures.
+
+To exercise the pagination cases with a local REDCap installation's actual `Survey::getPageFields()` and `Survey::setPageNum()` methods, run `REDCAP_SURVEY_CLASS=/path/to/redcap/Classes/Survey.php php tests/pagination.php`. Database access and record saves remain in-memory doubles; these checks do not execute REDCap's full browser, validation, or persistence pipeline.
 
 ## Changelog
 
 Version | Changes
 ------- | -----------
-Unreleased | Fixed bare-tag saves; enforced case-sensitive module tags; replaced shared editor toasts; preserved edits made during saves; escaped dynamic output; validated operand ranges; made custom-answer comparison literal; decoded embedding keys; made custom helper fields optional; added design/draft checks and redacted configuration audit events; added text-math rendering fallback and browser-bound submission proof. See the development review limitations above.
+Unreleased | Fixed bare-tag saves; enforced case-sensitive module tags; replaced shared editor toasts; preserved edits made during saves; escaped dynamic output; validated operand ranges; made custom-answer comparison literal; decoded embedding keys; made custom helper fields optional; added design/draft checks and redacted configuration audit events; added text-math rendering fallback and browser-bound submission proof; kept page numbering consistent across submissions and Save & Return while saving captured responses separately. See the development review limitations above.
 1.0.0   | Initial release.
 1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
 1.1.1   | Minor code refactor.

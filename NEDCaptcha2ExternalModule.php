@@ -37,6 +37,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	private $active = false;
 	private $suppress_calculation_emitter = false;
 	private $accepted_submission_key = null;
+	private $pending_capture = null;
 
 	#region Hooks
 
@@ -69,7 +70,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$store_key = self::STORE_KEY."{$psh}_{$client_key}";
 		}
 		if ($owned) {
-			$result = $this->framework->queryLogs("SELECT expected, passed, type WHERE message = ?", $store_key);
+			$result = $this->framework->queryLogs("SELECT expected, passed, type, capture_field, capture_response WHERE message = ?", $store_key);
 			$stored = $result->fetch_assoc() ?? $stored;
 		}
 
@@ -122,8 +123,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($returning || $existing_response || $stored["passed"] || $session_passed || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
 			if ($owned && $stored['passed'] && !$existing_response && isset($_POST['submit-action'])) {
 				$this->accepted_submission_key = $store_key;
-				// Preserve REDCap's normal metadata for validation and captured-response saving.
-				return;
+				$capture_field = $stored['capture_field'] ?? null;
+				if ($capture_field !== null && isset($tagged[self::AT_SETUP][$capture_field], $stored['capture_response'])) {
+					// Keep the verified answer server-side, independently of the survey's page layout.
+					$this->pending_capture = [clone $Proj, $capture_field, $stored['capture_response']];
+				}
 			}
 			// We are outside any context where the CAPTCHA should be shown
 			// Remove the fields
@@ -194,6 +198,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			"expected" => $captcha->expected,
 			"passed" => $passed,
 			"type" => $captcha->type,
+			"capture_field" => $passed && $params['capture'] ? $captcha_field : null,
+			"capture_response" => $passed && $params['capture'] ? $response : null,
 		];
 		$this->framework->removeLogs("message = ?", $store_key);
 		$this->framework->log($store_key, $stored);
@@ -212,10 +218,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$this->warnings = [];
 			// Carry the browser-bound proof into the first real survey submission.
 			$this->scripts_regular[] = "$('<input>', {type: 'hidden', name: " . self::encodeJavascriptValue(self::CLIENT_KEY) . "}).val(" . self::encodeJavascriptValue($client_key) . ").appendTo('form#form');";
-			if ($params["capture"]) {
-				// Capture the response
-				$this->scripts_regular[] = "$('<input>', {type: 'hidden', name: " . self::encodeJavascriptValue($captcha_field) . "}).val(" . self::encodeJavascriptValue($response) . ").appendTo('form#form');";
-			}
 			if ($params["debug"]) {
 				$this->scripts_top[] = "console.log('nedCAPTCHA 2: CAPTCHA passed.');";
 				if ($params["capture"]) {
@@ -355,6 +357,36 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance) {
 		if ($this->accepted_submission_key === null || $survey_hash !== $this->framework->getPublicSurveyHash($project_id)) return;
+		if ($this->pending_capture !== null) {
+			list($project, $field, $response) = $this->pending_capture;
+			$data = [$record => [$event_id => [$field => $response]]];
+			if ($project->isRepeatingFormOrEvent($event_id, $instrument)) {
+				$repeat_form = $project->isRepeatingForm($event_id, $instrument) ? $instrument : '';
+				$data = [$record => ['repeat_instances' => [$event_id => [$repeat_form => [$repeat_instance => [$field => $response]]]]]];
+			}
+			// The data API also uses Project's cache. Give it the original metadata only
+			// during this save, then restore the survey layout before REDCap continues.
+			$survey_project = $GLOBALS['Proj'];
+			$cached_project = \Project::$project_cache[$project_id] ?? null;
+			try {
+				$GLOBALS['Proj'] = \Project::$project_cache[$project_id] = $project;
+				$result = \REDCap::saveData([
+					'project_id' => $project_id, 'dataFormat' => 'array', 'data' => $data,
+					'performAutoCalc' => false,
+				]);
+				if (!is_array($result) || !empty($result['errors'])) throw new \RuntimeException('CAPTCHA capture failed');
+			}
+			catch (\Throwable $error) {
+				// Capture failure must not interrupt an otherwise saved survey.
+				$this->framework->log('CAPTCHA response capture failed', ['record' => $record, 'field' => $field]);
+			}
+			finally {
+				$GLOBALS['Proj'] = $survey_project;
+				if ($cached_project === null) unset(\Project::$project_cache[$project_id]);
+				else \Project::$project_cache[$project_id] = $cached_project;
+				$this->pending_capture = null;
+			}
+		}
 		// A completed first submission cannot be replayed to create another response.
 		$this->framework->removeLogs('message = ?', $this->accepted_submission_key);
 		unset($_SESSION[self::CHALLENGE_SESSION_KEY][$this->accepted_submission_key]);
