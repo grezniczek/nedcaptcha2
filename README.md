@@ -19,21 +19,23 @@ When the module is enabled in a project and an instrument's first public survey 
 - a custom challenge-response list, or
 - a disabled `none` mode that leaves the tagged fields out of normal survey operation without presenting a challenge.
 
-The module stores transient CAPTCHA state in the External Modules log and removes expired entries with an hourly cron. CAPTCHA state expires after 120 minutes. CAPTCHA responses are not saved to the project data unless the **Capture response** option is enabled.
+The module stores transient CAPTCHA state in the External Modules log and binds each challenge to the browser's REDCap survey session. Challenge proof expires 120 minutes after issuance; an hourly cron removes expired log entries. CAPTCHA responses are not saved to the project data unless the **Capture response** option is enabled.
 
 ![Screenshot](images/nedcaptcha.png)
 
-The custom challenge type can also be used as lightweight public-survey password protection by configuring one challenge such as `Type the access key to proceed. = secretaccesskey`.
+The custom challenge type can also be used as lightweight public-survey password protection by configuring one challenge such as `Type the access key to proceed. = secretaccesskey`. This applies to normal public entry; REDCap's individual-link workflows remain governed by REDCap.
 
 ## Requirements
 
 - REDCap 15.5.0 or newer.
 - REDCap External Modules Framework 16 or newer.
-- PHP GD with FreeType support.
+- Browser cookies that allow REDCap's survey session to persist across requests.
+- PHP GD with FreeType support for image rendering. If image rendering is unavailable, the module uses a plain-text math puzzle.
 
 ## Installation
 
 - Clone this repository into `<redcap-root>/modules/nedcaptcha2_v<version-number>`, or install it from the REDCap Consortium External Modules Repo when available.
+- For a development checkout, retain the directory name `nedcaptcha2_v9.9.9`; this directory convention is independent of published release versions.
 - In REDCap, go to _Control Center > Technical / Developer Tools > External Modules_ and enable **nedCAPTCHA 2**.
 - Enable the module in projects that need public survey CAPTCHA protection.
 
@@ -45,13 +47,17 @@ There are no system-level settings besides the standard External Modules Framewo
 
 Project-level settings:
 
-- **Debug mode:** Available to super users. When enabled, nedCAPTCHA 2 prints additional diagnostic information to the browser console.
+- **Debug mode:** Available to super users. When enabled, nedCAPTCHA 2 prints diagnostic information to the browser console and includes the answer in math challenges for troubleshooting.
 - **Allow solved CAPTCHA sessions:** When enabled, a browser that has solved the CAPTCHA may reuse that solved state for the same project's public survey without solving again in a new tab.
 - **Solved CAPTCHA session timeout:** Number of minutes a solved session remains valid. The default is 120 minutes. Use `0` for no configured timeout; sessions are still capped at 24 hours and expire after 2 hours without refresh.
 
 All CAPTCHA behavior is configured through the `@NEDCAPTCHA` action tag. In the Online Designer, click the `@NEDCAPTCHA` action tag on the field list to open the nedCAPTCHA Editor. Manual JSON editing is possible, but the editor is the recommended way to maintain settings. The JSON configuration format is described by [schema/nedcaptcha-action-tag.schema.json](schema/nedcaptcha-action-tag.schema.json).
 
 A bare `@NEDCAPTCHA` action tag uses the default math CAPTCHA on the survey and opens the editor with **Math Problem** selected.
+
+The editor requires design rights. In production projects, configuration changes require editable draft mode and are written to draft metadata. Successful changes are recorded in the REDCap project log with the field, metadata table, and before/after configuration; custom responses are redacted because they may be access keys.
+
+Save errors and warnings appear inside the editor. Successful saves use a module-owned notice instead of REDCap's shared Bootstrap toast helper. If settings are edited while a save is pending, the editor keeps the later changes open and requests another Update.
 
 ![Opening the nedCAPTCHA Editor from the Online Designer](images/gui-trigger.png)
 
@@ -154,7 +160,7 @@ This tag may be used on multiple fields.
 ### Math Problem
 
 - **Complexity:** `simple` uses addition. `complex` uses two operators selected from addition, subtraction, and multiplication. The generator avoids double multiplication and non-negative results are enforced.
-- **Minimum / Maximum operand values:** Positive integer bounds for generated operands. The defaults are 1 and 10.
+- **Minimum / Maximum operand values:** Positive integer bounds for initially generated operands. The defaults are 1 and 10, and the minimum must not exceed the maximum. The editor rejects an inverted range; an existing hand-written inverted range is normalized to 1 through 10 at runtime. Subtraction problems can enlarge an operand to keep the result non-negative.
 - **Show as text:** By default, math challenges are rendered as images. This option renders the math expression as text, which may improve accessibility for screen-reader users.
 - **Background color / Text color:** Colors may be entered as HTML hex values such as `#ff0000` or as comma-separated RGB triplets such as `255,0,0`.
 
@@ -179,7 +185,9 @@ The color of grass? = green
 Snow White and the __?__ dwarfs = seven
 ```
 
-The module randomly selects one pair. By default, response comparison is case-sensitive. Enable **Use case-insensitive comparison for responses** to accept answers regardless of case.
+The module randomly selects one pair. Challenges are displayed as escaped plain text; use `@NEDCAPTCHA-CUSTOM-EMBED` with descriptive fields for formatted content or images. JSON string parameters for embedding keys are decoded, so escaped quotes, backslashes, and Unicode escapes can match the challenge text.
+
+Leading and trailing whitespace is trimmed from responses. Otherwise, custom responses are compared as text: leading zeros are significant, and scientific-notation strings are not treated as equivalent numbers. By default, comparison is case-sensitive. Enable **Use case-insensitive comparison for responses** to accept answers regardless of case. The custom helper fields are optional.
 
 ## Styling
 
@@ -204,19 +212,35 @@ For example:
 ## Notes and Limitations
 
 - The module is intended for the first page of a fresh public survey. It does not protect data-entry forms, authenticated survey links tied to existing records, returning surveys, survey queue passthroughs, or end-of-survey/return-code flows.
+- REDCap's private-link workflows, including participant-link issuance, are outside the intended CAPTCHA scope. A link issued by REDCap is handled as an individual survey link; nedCAPTCHA does not provide an access-control boundary around REDCap's issuance of such links.
 - Calculated fields are not evaluated while the CAPTCHA-only page is displayed. Normal calculation behavior resumes after the CAPTCHA is passed. Branching logic remains available for `@NEDCAPTCHA-CUSTOM-CHALLENGE`; logic used on the CAPTCHA-only page should reference fields retained on that page.
 - The Save & Return Later button is hidden while the CAPTCHA is being presented.
 - Hidden REDCap fields, except the CSRF token and nedCAPTCHA's own temporary client key, are removed from the CAPTCHA form before submission.
-- CAPTCHA proof is bound to the browser's REDCap survey session, expires after two hours, and is consumed when the first survey submission is saved. Later pages use REDCap's verified response hash.
+- CAPTCHA proof is bound to the browser's REDCap survey session, expires after two hours, and is consumed through the save-record hook when the first survey submission is saved. The proof expires from challenge issuance, rather than from the last edit to the survey form. Later pages and resumed responses rely on REDCap's response hashes, private survey links, and return-code authentication.
 - If custom type is selected without any valid challenge-response pairs, validation falls back to a math CAPTCHA.
 - If CAPTCHA generation or image rendering fails, the module falls back to a plain-text math puzzle so that respondents can still reach the survey.
 - Solved CAPTCHA sessions are disabled by default. When disabled, opening the same public survey in a new tab requires solving the CAPTCHA again.
 - When solved CAPTCHA sessions are enabled, the solved state is stored as an opaque browser cookie backed by server-side session metadata. It applies only to the same browser and the same project public survey.
 
+### Current Development Review Limitations
+
+The unreleased changes still have the following issues requiring correction before release:
+
+- A CAPTCHA-only first section can produce different page numbering when the form is displayed and when its first submission is processed. This can discard first-page answers or repeat/skip pages; the bundled multi-page demo also uses a separate CAPTCHA section.
+- If the challenge proof expires or the survey session is lost before the first submission, the gate clears the submitted answers and presents a new CAPTCHA. This also affects a first-page Save & Return request; submitted answers are not buffered for later recovery.
+- If editor access is refused while loading settings, such as after a change to draft mode or design rights, the server error is not displayed and the editor can open empty.
+
+### Development Checks
+
+Install JavaScript test dependencies with `npm ci`, then run `npm test`. PHP and Node.js 18 or newer are needed for these checks; Node.js and the npm packages are not runtime dependencies of the external module.
+
+The suite covers editor saves and notices, in-memory survey-hook requests, and text-math fallback with image creation disabled, including a final fallback when random-number generation is disabled. The survey doubles use a single-page layout and do not execute REDCap's full save, pagination, or Save & Return pipeline; passing this suite does not establish compatibility with those flows.
+
 ## Changelog
 
 Version | Changes
 ------- | -----------
+Unreleased | Fixed bare-tag saves; enforced case-sensitive module tags; replaced shared editor toasts; preserved edits made during saves; escaped dynamic output; validated operand ranges; made custom-answer comparison literal; decoded embedding keys; made custom helper fields optional; added design/draft checks and redacted configuration audit events; added text-math rendering fallback and browser-bound submission proof. See the development review limitations above.
 1.0.0   | Initial release.
 1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
 1.1.1   | Minor code refactor.

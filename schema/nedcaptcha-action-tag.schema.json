@@ -32,13 +32,13 @@
       "default": "simple"
     },
     "minValue": {
-      "description": "Minimum generated operand value for math challenges.",
+      "description": "Minimum initially generated operand value for math challenges. Must not exceed maxValue; the editor rejects inverted ranges, and runtime validation normalizes them to 1 through 10.",
       "type": "integer",
       "minimum": 1,
       "default": 1
     },
     "maxValue": {
-      "description": "Maximum generated operand value for math challenges.",
+      "description": "Maximum initially generated operand value for math challenges. Must be at least minValue. Subtraction problems may enlarge an operand to avoid a negative result.",
       "type": "integer",
       "minimum": 1,
       "default": 10
@@ -56,7 +56,7 @@
       "default": 5
     },
     "reuse": {
-      "description": "Reuse the same generated challenge after an unsuccessful attempt.",
+      "description": "Reuse the same generated distorted-image challenge after an unsuccessful attempt.",
       "type": "boolean",
       "default": false
     },
@@ -121,12 +121,12 @@
         ],
         "properties": {
           "challenge": {
-            "description": "Challenge text or custom challenge key shown to the respondent, or matched by @NEDCAPTCHA-CUSTOM-EMBED.",
+            "description": "Plain text displayed with HTML escaping, or a custom challenge key matched by the decoded JSON string parameter of @NEDCAPTCHA-CUSTOM-EMBED.",
             "type": "string",
             "minLength": 1
           },
           "response": {
-            "description": "Expected response for this custom challenge.",
+            "description": "Expected text response for this custom challenge. Leading and trailing whitespace is trimmed; numeric-looking strings are compared literally, with optional case folding controlled by caseInsensitive.",
             "type": "string",
             "minLength": 1
           }
