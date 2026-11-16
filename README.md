@@ -4,7 +4,7 @@
 
 nedCAPTCHA 2 adds CAPTCHA protection to REDCap public surveys without depending on an external CAPTCHA provider. The name stands for **n**o **e**xternal **d**ependencies.
 
-Release metadata is prepared for **1.1.4**, with a planned release date of **2026-11-16**. Resolve the [release readiness findings](#114-release-readiness) before publishing.
+Release metadata is prepared for **1.1.4**, with a planned release date of **2026-11-17**. See the [release validation results](#114-release-readiness).
 
 This is a new version of [nedCAPTCHA](https://github.com/grezniczek/redcap_nedcaptcha). It uses action-tagged fields on the first survey page instead of a fixed module-level CAPTCHA page, which allows more project-specific layout, field embedding, and compatibility with REDCap Multi-Language Management.
 
@@ -222,6 +222,7 @@ For example:
 - Hidden REDCap fields, except the CSRF token and nedCAPTCHA's own temporary client key, are removed from the CAPTCHA form before submission.
 - CAPTCHA proof is bound to the browser's REDCap survey session, expires after two hours, and is consumed through the save-record hook when the first survey submission is saved. The proof expires from challenge issuance, rather than from the last edit to the survey form. Later pages and resumed responses rely on REDCap's response hashes, private survey links, and return-code authentication.
 - If proof expires or the session is lost before the first submission, eligible first-page answers are held temporarily in the browser's current server-side survey session while a new CAPTCHA is presented. Solving it resumes the original submission through REDCap's normal validation and saving, including Save & Return Later. Held answers are removed after saving or after two hours; the recovery session must persist during re-verification. Answers are not included in the CAPTCHA HTML or persistent module logs.
+- If REDCap's native upload context is also lost, solving the CAPTCHA restores the other answers to the form and highlights files that must be uploaded again. Nothing is saved automatically in that case; upload the files again and submit or choose Save & Return Later. Uploaded files remain usable after proof expiry when their native upload context is still valid.
 - After the CAPTCHA is solved, helper fields are excluded consistently from the displayed survey, submissions, and Save & Return requests so that page numbering stays the same. Captured responses are saved separately through REDCap's data API; a capture failure is logged without interrupting the survey save.
 - If custom type is selected without any valid challenge-response pairs, validation falls back to a math CAPTCHA.
 - Unparseable action-tag parameters and missing or invalid CAPTCHA types fall back to a math challenge, with a diagnostic warning. Disabling protection requires the explicit configuration `"type": "none"`. The editor opens invalid stored parameters with math defaults so they can be corrected; invalid editor submissions are rejected without changing metadata.
@@ -231,7 +232,19 @@ For example:
 
 ### 1.1.4 Release Readiness
 
-The issues identified in the code review on 2026-11-16 have been corrected and covered by automated checks on PHP 8.4.22, including pagination checks using the local REDCap survey class. Full browser validation through REDCap's survey validation and persistence pipeline is still required before publishing.
+The issues identified in the code review on 2026-11-16 have been corrected and covered by automated checks on PHP 8.4.22, including pagination checks using the local REDCap survey class. Browser validation was performed on 2026-11-17 using the local REDCap 17.6.1 development installation, headless Chromium 159, and disposable project 562. The checks exercised REDCap's actual survey validation and persistence pipeline and verified saved answers in the database.
+
+| Browser coverage | Result |
+| --- | --- |
+| Single-page and paginated surveys; normal submission and Save & Return Later; intact proof, expired proof, and lost survey session | Passed all 12 combinations; incorrect recovery answers remained blocked and no response was saved before re-verification. |
+| Challenge types and discovery | Image, bare/simple math, complex math, and custom challenges passed. Invalid JSON and invalid types remained protected by math; explicit `none` skipped the challenge. A later-section tag protected a single-page survey and remained outside the supported first-page scope when pagination was enabled. |
+| Saved responses and continuation | Text, numeric, radio, checkbox, date, Unicode, and multiline answers retained; Next/Previous, return-code entry in a fresh browser session, repeated Save & Return, and completion passed. |
+| Native server validation | Invalid numeric submissions redisplayed the normal survey with the other answers retained; correcting the value saved successfully, including after proof expiry and session loss. |
+| Native file uploads in both layouts and with both submission actions | Valid upload contexts retained files after proof expiry. Lost contexts restored the other answers and displayed a re-upload notice; uploading again and saving passed. |
+| Authenticated editor | User confirmed normal loading, changing Re-use challenge, saving and reopening, and restoring the original value. |
+| Editor permission and draft errors | Visible errors and Cancel-only dialogs passed with the native jQuery UI widget and simulated server replies; the PHP permission/draft guards are covered by the automated suite. |
+
+Browser testing found and corrected silent attachment loss after survey-session loss. Regression tests cover retaining owned upload contexts, returning a filled form for unowned contexts, and saving a replacement upload. Project annotations and pagination were restored after testing; synthetic responses and attachments remain in project 562 for inspection. These results cover this local installation and Chromium; other REDCap installations and browsers were not exercised.
 
 ### Development Checks
 
@@ -243,7 +256,7 @@ Editor load checks cover design-rights and draft-mode failures, rejected request
 
 Run `php tests/rendering.php` separately to verify image generation with every PHP diagnostic, including precision-loss deprecations, treated as an error. These checks decode the generated PNGs and verify nonblank content, dimensions, unchanged challenge types, and reused answers. They cover simple/complex math images and distorted images at every allowed length, angle variation, size variation, and noise density.
 
-Submission recovery checks cover normal submissions and Save & Return after proof expiry, session loss, or missing log state on single-page and paginated surveys, with response capture enabled or disabled. They also cover checkbox controls, blank/zero/multiline values, native upload and validation context, incorrect answers, browser/tab isolation, proof rotation, buffer expiration and consumption, unsafe control filtering, math challenges, retry before saving, and capture failures.
+Submission recovery checks cover normal submissions and Save & Return after proof expiry, session loss, or missing log state on single-page and paginated surveys, with response capture enabled or disabled. They also cover checkbox controls, blank/zero/multiline values, native upload and validation context, incorrect answers, browser/tab isolation, proof rotation, buffer expiration and consumption, unsafe control filtering, math challenges, retry before saving, and capture failures. Eight additional upload-recovery cases cover owned and lost native upload contexts with both submission actions and pagination settings, including checkbox prefill and preserving the verified CAPTCHA response until the replacement upload is saved.
 
 To exercise the pagination cases with a local REDCap installation's actual `Survey::getPageFields()` and `Survey::setPageNum()` methods, run `REDCAP_SURVEY_CLASS=/path/to/redcap/Classes/Survey.php php tests/pagination.php`. Database access and record saves remain in-memory doubles; these checks do not execute REDCap's full browser, validation, or persistence pipeline.
 
@@ -251,7 +264,7 @@ To exercise the pagination cases with a local REDCap installation's actual `Surv
 
 Version | Changes
 ------- | -----------
-1.1.4 (planned: 2026-11-16) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Displayed editor load errors and configuration warnings. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Made invalid parameters and CAPTCHA types fall back to math instead of disabling protection. Preserved first-page submissions across proof expiry or session loss, including Save & Return Later. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Fixed GD precision-loss deprecations so image rendering does not unnecessarily fall back to text math. Added automated regression checks. Full REDCap browser validation is still pending.
+1.1.4 (planned: 2026-11-17) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Displayed editor load errors and configuration warnings. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Made invalid parameters and CAPTCHA types fall back to math instead of disabling protection. Preserved first-page submissions across proof expiry or session loss, including Save & Return Later. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Fixed GD precision-loss deprecations so image rendering does not unnecessarily fall back to text math. Prevented silent attachment loss after survey-session loss by restoring the other answers and requesting re-upload before saving. Added automated regression checks and validated public-survey recovery, Save & Return, file uploads, and editor behavior through local REDCap browser tests.
 1.1.3   | Prevented REDCap calculation JavaScript from running against fields removed from the CAPTCHA-only survey page while retaining branching logic for custom challenges.
 1.1.2   | Removed "Test" link (development artifact).
 1.1.1   | Minor code refactor.
@@ -275,10 +288,10 @@ BibTeX:
   version = {1.1.4},
   year = {2026},
   month = {11},
-  date = {2026-11-16},
+  date = {2026-11-17},
   doi = {10.5281/zenodo.20492803},
   url = {https://github.com/grezniczek/nedcaptcha2}
 }
 ```
 
-Citation metadata is also available in [CITATION.cff](CITATION.cff). These examples are prepared for the planned 1.1.4 release dated 2026-11-16; update the date if publication is delayed. The DOI above identifies the software archive across all versions, rather than a version-specific 1.1.4 deposit. After publication, use the version-specific DOI from Zenodo when citing that exact archived release.
+Citation metadata is also available in [CITATION.cff](CITATION.cff). These examples are prepared for the planned 1.1.4 release dated 2026-11-17; update the date if publication is delayed. The DOI above identifies the software archive across all versions, rather than a version-specific 1.1.4 deposit. After publication, use the version-specific DOI from Zenodo when citing that exact archived release.

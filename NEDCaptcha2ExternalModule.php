@@ -39,6 +39,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	private $suppress_calculation_emitter = false;
 	private $accepted_submission_key = null;
 	private $pending_capture = null;
+	private $reupload_recovery = false;
 
 	#region Hooks
 
@@ -135,7 +136,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		if ($returning || $existing_response || $stored["passed"] || $session_passed || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
 			if ($owned && $stored['passed'] && $psh === $sh && !$returning && !$existing_response && isset($tagged[self::AT_SETUP])) {
-				$this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged);
+				$this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged, $client_key);
 				$this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			}
 			// We are outside any context where the CAPTCHA should be shown
@@ -224,7 +225,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($passed) {
 			// CAPTCHA was solved
 			$this->createSolvedSession($project_id, $psh);
-			$resumed = $this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged);
+			$resumed = $this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged, $client_key);
 			if ($resumed) $this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
 			foreach ($this->nedcaptcha_fields as $field) {
@@ -232,8 +233,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 				unset($Proj->forms[$instrument]['fields'][$field]);
 			}
 			if ($resumed) {
-				// REDCap now validates and saves the original submission normally,
-				// including its Save & Return action, before any survey HTML is built.
+				// Resume REDCap's native submission or file re-upload prefill path
+				// before any survey HTML is built.
 				$this->active = false;
 				return;
 			}
@@ -460,6 +461,11 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	}
 
 	function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
+		// Native prefill can have a tentative record ID without saving a response.
+		if ($this->reupload_recovery && $survey_hash === $this->framework->getPublicSurveyHash($project_id)) {
+			print \RCView::script(join("\n", $this->scripts_regular), true);
+			return;
+		}
 
 		// Check if this is a fresh (i.e., not associated with any record) public survey
 		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
@@ -704,7 +710,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		return $filtered;
 	}
 
-	private function restorePendingSubmission($store_key, $project, $instrument, $tagged) {
+	private function restorePendingSubmission($store_key, $project, $instrument, $tagged, $client_key) {
 		$submission = $_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] ?? null;
 		if ($submission === null) return false;
 		// Recheck field eligibility in case the design changed during verification.
@@ -713,7 +719,51 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		foreach (['__add_participant', '__participant_identifier', '__return', '__endpublicsurvey', '__rh', '__endsurvey', '__page__', '__prevpage', '__reqmsg', '__passthru', 'id'] as $flag) {
 			unset($_GET[$flag]);
 		}
+		if ($this->prefillForFileReupload($_POST, $project, $client_key)) {
+			// The filled form now owns the values. Do not replay its old ticket or
+			// overwrite a new upload when the respondent explicitly submits again.
+			unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key]);
+			return true;
+		}
 		if ($_POST['submit-action'] === 'submit-btn-savereturnlater') $_GET['__return'] = 1;
+		return true;
+	}
+
+	private function prefillForFileReupload($post, $project, $client_key) {
+		$files = [];
+		foreach ($post as $field => $value) {
+			if (($project->metadata[$field]['element_type'] ?? '') === 'file' && $value !== '' && $value !== '0') $files[] = $field;
+		}
+		$context_class = '\\Vanderbilt\\REDCap\\Classes\\FileFields\\FileFieldUploadContext';
+		if (!$files || !class_exists($context_class) || $context_class::fromTicket($post['__file_upload_context__'] ?? '') !== null) return false;
+
+		// Native upload receipts belong to the lost session. Re-enter through
+		// REDCap's prefill flow to obtain a new upload context, without auto-saving.
+		$prefill = ['__prefill' => '1'];
+		foreach ($post as $field => $value) {
+			if (strpos($field, '__chk__') === 0) {
+				list($name, $choice) = explode('_RC_', substr($field, 7), 2);
+				// Native prefill uses export-style checkbox names and a checked flag.
+				if ($value !== '') $prefill[$name . '___' . str_replace('|', '.', $choice)] = '1';
+			}
+			elseif (isset($project->metadata[$field]) && !in_array($field, $files, true)) {
+				$prefill[$field] = $value;
+			}
+		}
+		$_POST = $prefill;
+		$this->reupload_recovery = true;
+		$message = $post['submit-action'] === 'submit-btn-savereturnlater'
+			? 'Your other answers have been restored. Please upload the highlighted files again, then choose Save & Return Later.'
+			: 'Your other answers have been restored. Please upload the highlighted files again, then continue the survey.';
+		$encoded_files = self::encodeJavascriptValue($files);
+		$encoded_message = self::encodeJavascriptValue($message);
+		$encoded_key = self::encodeJavascriptValue($client_key);
+		$encoded_name = self::encodeJavascriptValue(self::CLIENT_KEY);
+		$this->scripts_regular[] = "(function() { const form = $('form#form');"
+			. " $('<input>', {type: 'hidden', name: $encoded_name}).val($encoded_key).appendTo(form);"
+			. " $('<div>', {class: 'alert alert-warning', role: 'alert'}).text($encoded_message).prependTo(form);"
+			. " const fields = $encoded_files; form.find('[sq_id]').each(function() { if (fields.includes($(this).attr('sq_id'))) $(this).css('outline', '2px solid #b58100'); });"
+			. " })();";
 		return true;
 	}
 

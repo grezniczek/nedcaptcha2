@@ -22,6 +22,7 @@ class Records {
 }
 class RCView {
     public static function tt($key) { return $key; }
+    public static function script($script, $delayed = false) { return '<script>' . $script . '</script>'; }
 }
 class REDCap {
     public static $data = [];
@@ -435,4 +436,48 @@ foreach (['errors', 'throw'] as $failure) {
 }
 Project::$fieldTypes = [];
 
-echo 'Pagination, Save & Return, and ' . $recoveries . ' submission-recovery cases passed (' . (getenv('REDCAP_SURVEY_CLASS') ? 'native REDCap page methods' : 'in-memory page methods') . ").\n";
+// An expired CAPTCHA may retain native upload ownership, but a lost PHP session
+// must return the filled form for re-upload instead of silently saving no file.
+Project::$fieldTypes = ['file' => 'file', 'choices' => 'checkbox'];
+$uploadRecoveries = 0;
+foreach ([false, true] as $paginated) {
+    Project::$questionBySection = $paginated;
+    foreach ([true, false] as $uploadOwned) {
+        foreach (['submit-btn-saverecord', 'submit-btn-savereturnlater'] as $action) {
+            $_SESSION = [];
+            SurveyFramework::$logs = [];
+            REDCap::$data = REDCap::$saves = [];
+            if ($uploadOwned) $_SESSION['native_test_uploads']['original-ticket'] = true;
+            Crypto::$nextGuids = [$freshGuid];
+            $extra = ['file' => '', 'choices' => '', 'note' => '', 'zero' => ''];
+            $post = array_replace($recoverablePost, ['submit-action' => $action, 'file' => '1234',
+                '__file_upload_context__' => 'original-ticket', '__chk__choices_RC_1' => '1', '__chk__choices_RC_2' => '',
+                'note' => "<b>literal</b>\nUnicode: ü", 'zero' => '0']);
+            submit($post, [], null, $extra);
+            $module = surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'answer'], [], null, $extra);
+            $uploadRecoveries++;
+            if ($uploadOwned) {
+                check($_POST['file'] === '1234' && $_POST['submit-action'] === $action && !isset($_POST['__prefill']), 'Owned upload recovery changed');
+                continue;
+            }
+            check(!isset($_POST['submit-action']) && ($_POST['__prefill'] ?? null) === '1', 'Lost upload ownership must not auto-save');
+            check(!isset($_POST['file']) && !isset($_POST['__file_upload_context__']), 'Recovery reused an unowned upload');
+            check($_POST['normal'] === 'held answer' && $_POST['zero'] === '0' && $_POST['note'] === $post['note'], 'Re-upload recovery lost other answers');
+            check(($_POST['choices___1'] ?? null) === '1' && !isset($_POST['choices___2']), 'Native checkbox prefill was incorrect');
+            check(REDCap::$data === [] && !isset($_SESSION[$pendingKey][$freshKey]), 'Re-upload form saved data or retained stale submission');
+            check(isset($_SESSION[Module::CHALLENGE_SESSION_KEY][$freshKey]), 'Re-upload form consumed the verified proof');
+            ob_start();
+            $module->redcap_survey_page(355, 'unsaved-record', 'form_1', 1, null, 'public-hash', null, 1);
+            $html = ob_get_clean();
+            check(strpos($html, 'upload the highlighted files again') !== false && strpos($html, $freshGuid) !== false, 'Re-upload notice/proof missing on the native prefill page');
+            check(strpos($html, $post['note']) === false, 'Prefilled answers leaked into JavaScript');
+            $_SESSION['native_test_uploads']['new-ticket'] = true;
+            submit([Module::CLIENT_KEY => $freshGuid, 'submit-action' => $action, '__page__' => 1,
+                'normal' => 'held answer', 'file' => '5678', '__file_upload_context__' => 'new-ticket'], [], null, $extra);
+            check(REDCap::$data['survey-record'][1]['file'] === '5678' && REDCap::$data['survey-record'][1]['captcha'] === 'answer', 'Re-uploaded file/verified answer did not save');
+        }
+    }
+}
+Project::$fieldTypes = [];
+
+echo 'Pagination, Save & Return, ' . $recoveries . ' submission-recovery cases, and ' . $uploadRecoveries . ' upload-recovery cases passed (' . (getenv('REDCAP_SURVEY_CLASS') ? 'native REDCap page methods' : 'in-memory page methods') . ").\n";

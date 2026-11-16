@@ -9,6 +9,14 @@ namespace ExternalModules {
         public function getPublicSurveyHash($projectId) { return $this->framework->getPublicSurveyHash($projectId); }
     }
 }
+namespace Vanderbilt\REDCap\Classes\FileFields {
+    // Native uploads belong to the PHP session, independently of CAPTCHA proof.
+    class FileFieldUploadContext {
+        public static function fromTicket($ticket) {
+            return isset($_SESSION['native_test_uploads'][$ticket]) ? new self() : null;
+        }
+    }
+}
 namespace {
     define('PAGE', 'surveys/index.php');
 
