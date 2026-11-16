@@ -28,12 +28,14 @@ async function fixture(t) {
     $.fn.dialog = function(command) {
         if (typeof command === 'object') {
             this.data('dialog-options', command);
-            command.open.call(this[0]);
+            this.show();
+            command.open?.call(this[0]);
         }
         else if (command === 'close') {
             const options = this.data('dialog-options');
             assert.ok(options, 'Cannot close a destroyed dialog');
             options.close.call(this[0]);
+            this.hide();
         }
         else if (command === 'destroy') this.removeData('dialog-options');
         return this;
@@ -56,12 +58,14 @@ async function fixture(t) {
         ajax(action, payload) {
             state.requests.push({ action, payload: JSON.parse(JSON.stringify(payload)) });
             if (action === 'get-params') {
-                const data = {
+                if (state.loadThrow) throw state.loadThrow;
+                const data = 'loadResult' in state ? state.loadResult : {
                     params: { type: 'math' }, keys: ['type'],
-                    html: '<input type="radio" name="type" value="math" checked><input type="radio" name="type" value="image"><input type="radio" name="type" value="none">'
+                    html: '<input type="radio" name="type" value="math" checked><input type="radio" name="type" value="image"><input type="radio" name="type" value="none">',
+                    errors: [], warnings: []
                 };
                 state.loaded.push(data);
-                return Promise.resolve(data);
+                return data instanceof Error ? Promise.reject(data) : Promise.resolve(data);
             }
             return state.result instanceof Error ? Promise.reject(state.result) : Promise.resolve(state.result);
         }
@@ -85,6 +89,103 @@ test('only the exact uppercase setup tag receives an editor link', async t => {
     const { $ } = await fixture(t);
     assert.equal($('#field0-tr a.nedCAPTCHA-OD-link').length, 1);
     assert.equal($('a.nedCAPTCHA-OD-link').length, 1);
+});
+
+for (const [reason, message] of [
+    ['permission', 'Design rights are required to edit CAPTCHA settings.'],
+    ['draft mode', 'Enter editable draft mode before changing CAPTCHA settings in a production project.']
+]) {
+    test(`${reason} load failures display the server message without editable controls`, async t => {
+        const f = await fixture(t);
+        f.state.loadResult = { errors: [message, '<img src=x onerror=alert(1)>'], warnings: [], html: '<input name="type"><img src=x>' };
+        await f.open();
+        assert.match(f.editor().find('[role="alert"]').text(), /Unable to load CAPTCHA settings/);
+        assert.notEqual(f.editor().css('display'), 'none', 'Load errors must be visible');
+        assert.ok(f.editor().find('[role="alert"]').text().includes(message));
+        assert.ok(f.editor().text().includes('<img src=x onerror=alert(1)>'));
+        assert.equal(f.editor().find('input, img').length, 0, 'Failed response HTML must not be inserted');
+        assert.equal(f.editor().data('dialog-options').buttons.length, 1, 'Update must not be offered after load failure');
+        f.editor().trigger('input');
+        await f.open();
+        assert.equal(f.state.requests.length, 1, 'An open error dialog must keep the editor lock');
+        assert.equal(f.state.requests.filter(r => r.action === 'set-params').length, 0);
+        f.cancel();
+        delete f.state.loadResult;
+        await f.open();
+        assert.equal(f.editor().find('[role="alert"]').length, 0, 'Reopening must clear the load error');
+        f.change('image');
+        f.update();
+        await tick();
+        assert.equal(f.editor().data('dialog-options'), undefined);
+        assert.equal(f.state.requests.filter(r => r.action === 'set-params').length, 1);
+    });
+}
+
+test('malformed and legacy load responses show a visible error instead of an empty editor', async t => {
+    const f = await fixture(t);
+    for (const result of [null, undefined, 'ERROR', {},
+        { html: '', params: {}, keys: [] },
+        { html: '<input name="type">', params: null, keys: [] },
+        { html: '<input name="type">', params: [], keys: [] },
+        { html: '<input name="type">', params: {}, keys: 'type' },
+        { html: '<input name="type">', params: {}, keys: [null] }]) {
+        f.state.loadResult = result;
+        await f.open();
+        assert.ok(f.editor().data('dialog-options'), 'Failure must open a dialog');
+        assert.ok(f.editor().find('[role="alert"]').text().length > 0, 'Failure must explain the problem');
+        assert.equal(f.editor().find('input').length, 0);
+        assert.equal(f.editor().data('dialog-options').buttons.length, 1);
+        f.cancel();
+    }
+    assert.equal(f.state.requests.filter(r => r.action === 'set-params').length, 0);
+});
+
+test('load request rejection and synchronous failure are visible and allow reopening', async t => {
+    const f = await fixture(t);
+    for (const throws of [false, true]) {
+        if (throws) f.state.loadThrow = new Error('Internal transport details');
+        else f.state.loadResult = new Error('Internal transport details');
+        await f.open();
+        assert.match(f.editor().find('[role="alert"]').text(), /could not be loaded/i);
+        assert.equal(f.editor().text().includes('Internal transport details'), false);
+        assert.equal(f.editor().data('dialog-options').buttons.length, 1);
+        f.cancel();
+        delete f.state.loadResult;
+        delete f.state.loadThrow;
+    }
+    await f.open();
+    assert.equal(f.editor().find('input').length, 3, 'Load failure must not prevent a later successful load');
+});
+
+test('a pending load cannot be opened twice and a late failure remains closable', async t => {
+    const f = await fixture(t);
+    let finish;
+    f.state.loadResult = new Promise(resolve => { finish = resolve; });
+    await f.open();
+    await f.open();
+    assert.equal(f.state.requests.length, 1);
+    finish({ errors: ['Design rights are required to edit CAPTCHA settings.'], warnings: [] });
+    await tick();
+    assert.match(f.editor().find('[role="alert"]').text(), /Design rights/);
+    f.cancel();
+    assert.equal(f.editor().data('dialog-options'), undefined);
+});
+
+test('load warnings remain visible while valid settings can be edited and saved', async t => {
+    const f = await fixture(t);
+    f.state.loadResult = {
+        params: { type: 'math' }, keys: ['type'],
+        html: '<input name="type" value="math"><input name="type" value="image">',
+        warnings: ['Invalid parameters. Defaulting to a math CAPTCHA.'], errors: []
+    };
+    await f.open();
+    assert.match(f.editor().find('.alert-warning').text(), /Defaulting to a math CAPTCHA/);
+    assert.equal(f.editor().data('dialog-options').buttons.length, 2);
+    f.change('image');
+    f.update();
+    await tick();
+    assert.equal(f.state.requests.at(-1).payload.params.type, 'image');
+    assert.equal(f.editor().data('dialog-options'), undefined);
 });
 
 test('successful saves close the dialog and use a dismissible module notice', async t => {

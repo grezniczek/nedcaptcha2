@@ -61,6 +61,8 @@ The editor requires design rights. In production projects, configuration changes
 
 Save errors and warnings appear inside the editor. Successful saves use a module-owned notice instead of REDCap's shared Bootstrap toast helper. If settings are edited while a save is pending, the editor keeps the later changes open and requests another Update.
 
+If loading settings fails because design rights or editable draft mode have changed, the editor shows the server's explanation in a closeable error dialog with no Update button. Failed requests and malformed replies also show an error instead of an empty editor. Resolve the issue and reload the Online Designer before trying again. Recoverable configuration warnings appear alongside valid settings so they can be corrected and saved.
+
 ![Opening the nedCAPTCHA Editor from the Online Designer](images/gui-trigger.png)
 
 ![nedCAPTCHA Editor dialog](images/gui-dialog.png)
@@ -229,9 +231,8 @@ For example:
 
 ### 1.1.4 Release Readiness
 
-The following issues from the code review on 2026-11-16 still require correction before release:
+The following issue from the code review on 2026-11-16 still requires correction before release:
 
-- If editor access is refused while loading settings, such as after a change to draft mode or design rights, the server error is not displayed and the editor can open empty.
 - GD rendering passes fractional values to integer parameters, producing precision-loss deprecations on PHP 8.4. If an installation converts these deprecations to exceptions, image challenges fall back to text math. Explicit integer conversion is needed before claiming clean compatibility with these PHP versions.
 
 The automated checks pass on PHP 8.4.22, including pagination checks using the local REDCap survey class. They do not cover all findings above or replace a browser test through REDCap's full survey saving pipeline.
@@ -242,6 +243,8 @@ Install JavaScript test dependencies with `npm ci`, then run `npm test`. PHP and
 
 The suite covers editor saves and notices, in-memory survey-hook requests, invalid-configuration recovery and editor repair, and text-math fallback with image creation disabled, including a final fallback when random-number generation is disabled. Invalid-configuration checks verify that incorrect answers remain blocked, correct math answers unlock the survey, and explicit disabled mode remains available. Pagination regressions cover discovery in the first and later sections with pagination enabled or disabled, helper fields across sections on single-page surveys, separate/shared CAPTCHA sections, Next/Previous, validation redisplay, Save & Return from either page, return-code continuation, optional response capture, repeating instances, and capture failures.
 
+Editor load checks cover design-rights and draft-mode failures, rejected requests, malformed/legacy replies, text-safe messages, duplicate opens during a pending load, closing and reopening after a failure, and editing valid settings accompanied by warnings.
+
 Submission recovery checks cover normal submissions and Save & Return after proof expiry, session loss, or missing log state on single-page and paginated surveys, with response capture enabled or disabled. They also cover checkbox controls, blank/zero/multiline values, native upload and validation context, incorrect answers, browser/tab isolation, proof rotation, buffer expiration and consumption, unsafe control filtering, math challenges, retry before saving, and capture failures.
 
 To exercise the pagination cases with a local REDCap installation's actual `Survey::getPageFields()` and `Survey::setPageNum()` methods, run `REDCAP_SURVEY_CLASS=/path/to/redcap/Classes/Survey.php php tests/pagination.php`. Database access and record saves remain in-memory doubles; these checks do not execute REDCap's full browser, validation, or persistence pipeline.
@@ -250,7 +253,7 @@ To exercise the pagination cases with a local REDCap installation's actual `Surv
 
 Version | Changes
 ------- | -----------
-1.1.4 (planned: 2026-11-16) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Made invalid parameters and CAPTCHA types fall back to math instead of disabling protection. Preserved first-page submissions across proof expiry or session loss, including Save & Return Later. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Added automated regression checks. Release remains pending the readiness findings above.
+1.1.4 (planned: 2026-11-16) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Displayed editor load errors and configuration warnings. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Made invalid parameters and CAPTCHA types fall back to math instead of disabling protection. Preserved first-page submissions across proof expiry or session loss, including Save & Return Later. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Added automated regression checks. Release remains pending the readiness findings above.
 1.1.3   | Prevented REDCap calculation JavaScript from running against fields removed from the CAPTCHA-only survey page while retaining branching logic for custom challenges.
 1.1.2   | Removed "Test" link (development artifact).
 1.1.1   | Minor code refactor.

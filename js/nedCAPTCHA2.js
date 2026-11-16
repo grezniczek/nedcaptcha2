@@ -78,9 +78,23 @@ function edit(field) {
 	$('#nedCAPTCHA-OD-editor').off('.nedCAPTCHA').html('');
 	editing = true;
 	log('Editing ' + field);
-	config.JSMO.ajax('get-params', { 'field': field })
+	Promise.resolve().then(() => config.JSMO.ajax('get-params', { 'field': field }))
 	.then(function(data) {
 		log('Data received:', data);
+		const errors = Array.isArray(data?.errors) ? data.errors.filter(message => typeof message === 'string') : [];
+		if (errors.length) {
+			showLoadError(field, errors);
+			return;
+		}
+		// Validate the load response before inserting HTML or enabling Update.
+		const stringList = value => Array.isArray(value) && value.every(item => typeof item === 'string');
+		if (!data || typeof data !== 'object' || Array.isArray(data)
+			|| typeof data.html !== 'string' || !data.html.trim()
+			|| !data.params || typeof data.params !== 'object' || Array.isArray(data.params)
+			|| !stringList(data.keys) || !stringList(data.errors) || !stringList(data.warnings)) {
+			showLoadError(field);
+			return;
+		}
 		$('#nedCAPTCHA-OD-editor')
 			.html(data.html)
 			// Outputs
@@ -180,11 +194,34 @@ function edit(field) {
 			}
 		
 		});
+		if (data.warnings.length) {
+			showNotice('nedCAPTCHA WARNING', [...new Set(data.warnings)], 'warning');
+		}
 	})
 	.catch(function(err) {
 		log('Error', err);
-		editing = false;
+		showLoadError(field);
 	});
+}
+
+function showLoadError(field, messages = ['CAPTCHA settings could not be loaded.']) {
+	const $editor = $('#nedCAPTCHA-OD-editor').off('.nedCAPTCHA').empty();
+	$editor.dialog({
+		title: 'nedCAPTCHA Editor <span style="font-weight: normal;"> &ndash; ' + field + '</span>',
+		modal: true,
+		resizable: false,
+		width: 800,
+		closeOnEscape: false,
+		buttons: [{
+			text: window['lang'].global_53,
+			click: function() { $editor.dialog('close'); }
+		}],
+		close: function() {
+			editing = false;
+			$editor.off('.nedCAPTCHA').empty().dialog('destroy');
+		}
+	});
+	showNotice('Unable to load CAPTCHA settings', [...messages, 'Reload the Online Designer before trying again.'], 'danger');
 }
 
 /**

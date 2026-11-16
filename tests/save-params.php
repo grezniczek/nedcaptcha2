@@ -265,6 +265,12 @@ namespace {
         Project::$status = $status;
         $response = save('@NEDCAPTCHA', ['type' => 'none'], $draft);
         check(count($response['errors']) > 0 && $GLOBALS['save_query'] === null, 'Unauthorized or noneditable project save succeeded');
+        $loadResponse = (new NEDCaptcha2ExternalModule())->redcap_module_ajax(
+            'get-params', ['field' => 'nc2_resp'], 355,
+            null, null, null, null, null, null, null, null, null, null, null
+        );
+        check($loadResponse === $response, 'Load must report the same access/draft error as save');
+        check(!isset($loadResponse['html']) && $GLOBALS['save_query'] === null, 'Refused load exposed editor HTML or wrote metadata');
         $checks++;
     }
     EditorFramework::$authenticated = EditorFramework::$design = true;
