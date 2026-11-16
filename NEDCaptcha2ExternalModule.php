@@ -663,13 +663,12 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	public function validate_params($params, $set_defaults = false) {
 		// A bare setup tag uses the default math CAPTCHA on the survey and in the editor.
 		if ($params === "") $params = ["type" => "math"];
-		if (!is_array($params)) {
-			if ($params == "") $params = "{}";
+		if (is_string($params)) {
 			$params = json_decode($params, true);
 		}
 		if (!is_array($params)) {
-			$this->errors[] = "Error parsing NEDCaptcha 2 parameters! CAPTCHA is disabled.";
-			$params = [ "type" => "none" ];
+			$this->warnings[] = "Invalid nedCAPTCHA 2 parameters. Defaulting to a math CAPTCHA.";
+			$params = [ "type" => "math" ];
 		}
 		$full = [
 			"debug" => $this->getProjectSetting("debug") == true,
@@ -744,7 +743,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// textColor
 		$full["textColor"] = Color::Parse($params["textColor"] ?? "#800000");
 		// type (none/math/image/custom, default math)
-		if (!isset($params["type"]) || !in_array($params["type"], ["none", "math", "image", "custom"])) {
+		if (!isset($params["type"]) || !in_array($params["type"], ["none", "math", "image", "custom"], true)) {
 			$params["type"] = "math";
 			$this->warnings[] = "Missing or invalid type parameter. Defaulting to \"math\".";
 		}

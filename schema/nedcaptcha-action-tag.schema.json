@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/grezniczek/nedcaptcha2/schema/nedcaptcha-action-tag.schema.json",
   "title": "nedCAPTCHA 2 @NEDCAPTCHA Action Tag Parameters",
-  "description": "Configuration object accepted by the @NEDCAPTCHA action tag. Omitted properties use the module defaults.",
+  "description": "Configuration object accepted by the @NEDCAPTCHA action tag. Omitted properties use the module defaults. Unparseable parameters and missing or invalid CAPTCHA types fall back to math; disabling protection requires the explicit type none.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

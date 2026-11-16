@@ -99,7 +99,9 @@ namespace {
         return (new \ReflectionProperty($module, $name))->getValue($module);
     }
     function request($params, $post = [], $get = [], $extraAnnotations = [], $settings = [], $fieldOrder = null) {
-        Project::$annotations = ['record_id' => '', 'captcha' => '@NEDCAPTCHA=' . json_encode($params), 'normal' => ''] + $extraAnnotations;
+        // Strings exercise hand-written action-tag parameters, including malformed ones.
+        $parameterText = is_string($params) ? $params : json_encode($params);
+        Project::$annotations = ['record_id' => '', 'captcha' => '@NEDCAPTCHA=' . $parameterText, 'normal' => ''] + $extraAnnotations;
         if ($fieldOrder !== null) {
             Project::$annotations = array_replace(array_fill_keys($fieldOrder, ''), Project::$annotations);
         }

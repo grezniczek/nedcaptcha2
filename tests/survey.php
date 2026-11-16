@@ -11,6 +11,34 @@ namespace {
     restore_error_handler();
 
     $key = NEDCaptcha2ExternalModule::STORE_KEY . 'public-hash_' . Crypto::getGuid();
+    // Hand-written invalid parameters must still gate the survey with solvable math.
+    foreach (['garbage', 'null', 'false', 'true', '"none"', '["none"]', '{"type":',
+        '{"type":true}', '{"type":1}', '{"type":0}', '{"type":null}', '{"type":[]}', '{"type":"unknown"}'] as $invalid) {
+        $_SESSION = [];
+        SurveyFramework::$logs = [];
+        $module = request($invalid);
+        check(property($module, 'active') && !isset($GLOBALS['Proj']->metadata['normal']), 'Invalid parameters exposed the survey: ' . $invalid);
+        check(SurveyFramework::$logs[$key]['type'] === 'math' && SurveyFramework::$logs[$key]['expected'] !== '', 'Fallback math challenge missing');
+        check(strpos($GLOBALS['Proj']->metadata['captcha']['element_label'], 'nedcaptcha2-challenge') !== false, 'Fallback challenge was not rendered');
+        check(property($module, 'errors') === [], 'Configuration recovery must not stop survey initialization');
+        $proof = [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid()];
+        $module = request($invalid, $proof + ['captcha' => 'incorrect', 'submit-action' => 'submit-btn-saverecord', 'normal' => 'forged']);
+        check(property($module, 'active') && $_POST === [] && !isset($GLOBALS['Proj']->metadata['normal']), 'Incorrect fallback answer bypassed protection');
+        $answer = SurveyFramework::$logs[$key]['expected'];
+        request($invalid, $proof + ['captcha' => $answer, 'submit-action' => 'submit-btn-saverecord', 'normal' => 'injected']);
+        check(SurveyFramework::$logs[$key]['passed'] && isset($GLOBALS['Proj']->metadata['normal']), 'Correct fallback answer did not reveal the survey');
+        check($_POST === [] && $_SERVER['REQUEST_METHOD'] === 'GET', 'Fallback solve also submitted survey answers');
+        $post = $proof + ['submit-action' => 'submit-btn-saverecord', 'normal' => 'real answer'];
+        request($invalid, $post);
+        check($_POST === $post && isset($GLOBALS['Proj']->metadata['normal']), 'Solved fallback did not authorize the first submission');
+    }
+    // Deliberately selecting the exact type "none" remains supported.
+    $_SESSION = [];
+    SurveyFramework::$logs = [];
+    $module = request(['type' => 'none']);
+    check(!property($module, 'active') && isset($GLOBALS['Proj']->metadata['normal']), 'Explicit disabled mode was changed');
+    check(!isset(SurveyFramework::$logs[$key]), 'Explicit disabled mode issued a challenge');
+
     foreach ([['0123', '123', false], ['0123', '0123', true], ['0e123', '0', false], ['0e123', '0e123', true], ['Secret', 'secret', false], ['', '', false]] as [$expected, $answer, $passes]) {
         seedChallenge($expected);
         request(['type' => 'custom', 'custom' => [['challenge' => 'Key', 'response' => $expected]]], [NEDCaptcha2ExternalModule::CLIENT_KEY => Crypto::getGuid(), 'captcha' => $answer]);

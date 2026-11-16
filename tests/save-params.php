@@ -176,6 +176,42 @@ namespace {
         $checks++;
     }
 
+    // Invalid JSON/scalars and invalid type values must never disable protection.
+    foreach (['garbage', '{"type":', 'null', 'false', 'true', '"none"', 0, false, null, new \stdClass(),
+        ['type' => true], ['type' => 1], ['type' => 0], ['type' => null], ['type' => []]] as $invalid) {
+        foreach ([false, true] as $withDefaults) {
+            $module = new NEDCaptcha2ExternalModule();
+            check($module->validate_params($invalid, $withDefaults)['type'] === 'math', 'Invalid configuration disabled the CAPTCHA');
+            $checks++;
+        }
+    }
+
+    // The editor offers math defaults and warnings for invalid stored parameters,
+    // without changing metadata until a valid configuration is explicitly saved.
+    foreach (['garbage', 'null', '"none"', '{"type":true}'] as $invalid) {
+        Project::$annotation = '@HIDDEN-FORM @NEDCAPTCHA=' . $invalid . ' @HIDDEN-PDF';
+        ActionTagHelper::$cache = [];
+        $GLOBALS['save_query'] = null;
+        $module = new NEDCaptcha2ExternalModule();
+        $response = $module->redcap_module_ajax(
+            'get-params', ['field' => 'nc2_resp'], 355,
+            null, null, null, null, null, null, null, null, null, null, null
+        );
+        check($response['params']['type'] === 'math', 'Invalid configuration did not open with math defaults');
+        check(preg_match('/<input[^>]*id="type-math"[^>]*checked/', $response['html']) === 1, 'Fallback math selection missing');
+        check($response['warnings'] !== [] && $response['errors'] === [], 'Recoverable configuration error must produce a warning');
+        check($GLOBALS['save_query'] === null, 'Reading invalid parameters changed metadata');
+        check(save(Project::$annotation, ['type' => 'math']) === ['errors' => [], 'warnings' => []], 'Invalid configuration could not be repaired');
+        check(strpos($GLOBALS['save_query'][1][0], '@HIDDEN-FORM @NEDCAPTCHA=') === 0
+            && substr($GLOBALS['save_query'][1][0], -strlen(' @HIDDEN-PDF')) === ' @HIDDEN-PDF', 'Repair changed surrounding action tags');
+        $checks++;
+    }
+    foreach (['garbage', ['type' => true], ['type' => 1]] as $invalid) {
+        $response = save('@NEDCAPTCHA', $invalid);
+        check($response['warnings'] !== [] && $GLOBALS['save_query'] === null, 'Invalid editor payload was saved');
+        $checks++;
+    }
+
     // The initial editor selection and the params sent back on a later edit must agree.
     Project::$annotation = '@NEDCAPTCHA';
     ActionTagHelper::$cache = [];
