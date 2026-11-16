@@ -173,7 +173,7 @@ class CaptchaGenerator
 		$challenge = trim(str_replace(" ", "", $challenge));
 		$nChars = mb_strlen($challenge);
 		// Calculate the width based on the number of characters.
-		$width = $height / 2 * $nChars;
+		$width = (int)($height / 2 * $nChars);
 
 		// Set the fontsize smaller than the height. 60% is good for the font used.
 		$fontSize = $height * 0.6;
@@ -197,8 +197,8 @@ class CaptchaGenerator
 				return false;
 			}
 			// Draw the text.
-			$x = ($width - $box[4]) / 2;
-			$y = ($height - $box[5]) / 2.2;
+			$x = (int)(($width - $box[4]) / 2);
+			$y = (int)(($height - $box[5]) / 2.2);
 			if (false === imagettftext($img, $fontSize, 0, $x, $y, $tc, $this->font, $challenge)) {
 				$this->error = "Cannot create text [drawing].";
 				return false;
@@ -252,11 +252,12 @@ class CaptchaGenerator
 
 		$nChars = strlen($challenge);
 		// Calculate the width based on the number of characters.
-		$width = $height / 1.6 * $nChars;
+		$width = (int)($height / 1.6 * $nChars);
 		// Set the fontsize smaller than the height. 60% is good for the font used.
 		$fontSize = $height * 0.6;
-		$fontSizeMin = $fontSize * $fontsizes[$settings["sizeVariation"]][0];
-		$fontSizeMax = $fontSize * $fontsizes[$settings["sizeVariation"]][1];
+		// Sample sizes in integer tenths of a point; GD accepts the resulting float.
+		$fontSizeMinTenths = (int)round($fontSize * $fontsizes[$settings["sizeVariation"]][0] * 10);
+		$fontSizeMaxTenths = (int)round($fontSize * $fontsizes[$settings["sizeVariation"]][1] * 10);
 		
 		try {
 			// Create the image.
@@ -282,14 +283,14 @@ class CaptchaGenerator
 			}
 			// Draw the text.
 			$charWidth = ($width * 0.85) / $nChars;
-			$y = ($height - $box[5]) / 2.2;
+			$y = (int)(($height - $box[5]) / 2.2);
 			
 			for ($i = 0; $i < strlen($challenge); $i++) {
-				$x = $width * 0.075 + $charWidth * $i;
+				$x = (int)($width * 0.075 + $charWidth * $i);
 				// Vary the angle.
 				$angle = $angles[$settings["angleVariation"]];
 				$a = mt_rand($angle * -1, $angle);
-				$this_fontsize = mt_rand($fontSizeMin * 10, $fontSizeMax * 10) / 10;
+				$this_fontsize = mt_rand($fontSizeMinTenths, $fontSizeMaxTenths) / 10;
 				if (false === imagettftext($img, $this_fontsize, $a, $x, $y, $tc, $this->font, substr($challenge, $i, 1))) {
 					$this->error = "Cannot create text [drawing].";
 					return false;
