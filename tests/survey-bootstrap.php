@@ -30,6 +30,7 @@ namespace {
     class Project {
         public static $annotations = [];
         public static $saveAndReturn = false;
+        public static $questionBySection = true;
         public static $headers = [];
         public static $repeating = '';
         public static $project_cache = [];
@@ -46,7 +47,7 @@ namespace {
                 $this->metadata[$field] = ['misc' => $annotation, 'element_label' => 'Label', 'form_name' => 'form_1', 'element_preceding_header' => self::$headers[$field] ?? ''];
             }
             $this->forms = ['form_1' => ['survey_id' => 1, 'fields' => array_fill_keys(array_keys($this->metadata), true)]];
-            $this->surveys = [1 => ['save_and_return' => self::$saveAndReturn]];
+            $this->surveys = [1 => ['save_and_return' => self::$saveAndReturn, 'question_by_section' => self::$questionBySection]];
         }
         public function isRepeatingFormOrEvent($event, $form) { return self::$repeating !== ''; }
         public function isRepeatingForm($event, $form) { return self::$repeating === 'form'; }
@@ -97,8 +98,11 @@ namespace {
     function property($module, $name) {
         return (new \ReflectionProperty($module, $name))->getValue($module);
     }
-    function request($params, $post = [], $get = [], $extraAnnotations = [], $settings = []) {
+    function request($params, $post = [], $get = [], $extraAnnotations = [], $settings = [], $fieldOrder = null) {
         Project::$annotations = ['record_id' => '', 'captcha' => '@NEDCAPTCHA=' . json_encode($params), 'normal' => ''] + $extraAnnotations;
+        if ($fieldOrder !== null) {
+            Project::$annotations = array_replace(array_fill_keys($fieldOrder, ''), Project::$annotations);
+        }
         ActionTagHelper::$cache = [];
         $_POST = $post;
         $_GET = $get + ['s' => 'public-hash'];

@@ -61,7 +61,7 @@ function surveyRequest($post = [], $get = [], $params = null) {
     return request($params ?? $GLOBALS['custom'], $post, $get, ['second' => '', 'form_1_complete' => '']);
 }
 function pages() {
-    [$pages] = Survey::getPageFields('form_1', true);
+    [$pages] = Survey::getPageFields('form_1', $GLOBALS['Proj']->surveys[1]['question_by_section']);
     return array_map('array_values', $pages);
 }
 function solve($params = null) {
@@ -75,7 +75,7 @@ function solve($params = null) {
 }
 function submit($post, $get = [], $params = null) {
     $module = surveyRequest($post, $get, $params);
-    [$pages] = Survey::getPageFields('form_1', true);
+    [$pages] = Survey::getPageFields('form_1', $GLOBALS['Proj']->surveys[1]['question_by_section']);
     // REDCap Surveys/index.php discards fields that belong to a different page
     // before DataEntry::saveRecord. Apply that boundary before simulating saving.
     foreach ($_POST as $field => $value) {
@@ -92,10 +92,57 @@ function submit($post, $get = [], $params = null) {
     return $module;
 }
 function navigate() {
-    [$pages, $count] = Survey::getPageFields('form_1', true);
+    [$pages, $count] = Survey::getPageFields('form_1', $GLOBALS['Proj']->surveys[1]['question_by_section']);
     Survey::setPageNum($pages, $count);
     return $_GET['__page__'];
 }
+
+// Discover the CAPTCHA and helpers on the actual first page, respecting whether
+// section headers start new pages. Include fields before a later-section CAPTCHA.
+foreach ([false, true] as $paginated) {
+    Project::$questionBySection = $paginated;
+    foreach ([false, true] as $captchaFirst) {
+        $layout = ($paginated ? 'paginated' : 'single-page') . ($captchaFirst ? '/first-section' : '/later-section');
+        $fieldOrder = $captchaFirst
+            ? ['record_id', 'captcha', 'instructions', 'display', 'normal', 'second', 'form_1_complete']
+            : ['record_id', 'normal', 'captcha', 'instructions', 'display', 'second', 'form_1_complete'];
+        Project::$headers = $captchaFirst
+            ? ['normal' => 'Questions', 'second' => 'More questions']
+            : ['captcha' => 'Verification', 'instructions' => 'Instructions', 'display' => 'Display', 'second' => 'More questions'];
+        $extra = ['instructions' => '@NEDCAPTCHA-INSTRUCTIONS', 'display' => '@NEDCAPTCHA-DISPLAY', 'second' => '', 'form_1_complete' => ''];
+        $_SESSION = [];
+        SurveyFramework::$logs = [];
+        $module = request($custom, [], [], $extra, [], $fieldOrder);
+        if ($paginated && !$captchaFirst) {
+            check(!property($module, 'active'), "$layout: later-page tag must stay outside the supported scope");
+            check(pages()[1] === ['normal'], "$layout: normal first page changed");
+            check(!isset(SurveyFramework::$logs[$key]), "$layout: later-page tag issued a challenge");
+            continue;
+        }
+        check(property($module, 'active'), "$layout: CAPTCHA was not discovered");
+        check(strpos($GLOBALS['Proj']->metadata['captcha']['element_label'], 'Question') !== false, "$layout: challenge missing");
+        check(isset($GLOBALS['Proj']->metadata['instructions'], $GLOBALS['Proj']->metadata['display']), "$layout: helper fields were not discovered");
+        foreach (['normal', 'second'] as $field) {
+            check(!isset($GLOBALS['Proj']->metadata[$field]), "$layout: $field leaked onto CAPTCHA page");
+        }
+        check(isset($GLOBALS['Proj']->metadata['form_1_complete']) === !$paginated, "$layout: form status did not follow the actual page count");
+
+        $module = request($custom, $proof + ['captcha' => 'wrong', 'submit-action' => 'submit-btn-saverecord', 'normal' => 'forged'], [], $extra, [], $fieldOrder);
+        check(property($module, 'active') && !isset($GLOBALS['Proj']->metadata['normal']), "$layout: incorrect answer bypassed the CAPTCHA");
+        check($_POST === [] && $_SERVER['REQUEST_METHOD'] === 'GET', "$layout: unverified answers could be saved");
+        request($custom, $proof + ['captcha' => 'answer'], [], $extra, [], $fieldOrder);
+        check(SurveyFramework::$logs[$key]['passed'], "$layout: correct answer did not solve the CAPTCHA");
+        foreach (['captcha', 'instructions', 'display'] as $field) {
+            check(!isset($GLOBALS['Proj']->metadata[$field]), "$layout: $field remained after solving");
+        }
+        $expected = $paginated ? [1 => ['normal'], 2 => ['second']] : [1 => ['normal', 'second']];
+        check(pages() === $expected, "$layout: solved survey layout does not match pagination setting");
+        $post = $proof + ['submit-action' => 'submit-btn-saverecord', '__page__' => 1, 'normal' => 'answer'];
+        request($custom, $post, [], $extra, [], $fieldOrder);
+        check($_POST === $post && pages() === $expected, "$layout: verified submission or layout changed");
+    }
+}
+Project::$questionBySection = true;
 
 // A CAPTCHA-only first section, as in the bundled demo, must disappear on every
 // ordinary request. Also cover a helper sharing the first section with questions.
@@ -150,11 +197,13 @@ foreach (['separate' => ['normal' => 'Section 1', 'second' => 'Section 2'], 'sha
 }
 
 // Single-page surveys must retain their ordinary fields and capture too.
+Project::$questionBySection = false;
 Project::$headers = [];
 solve();
 submit($proof + ['submit-action' => 'submit-btn-saverecord', '__page__' => 1, 'normal' => 'first answer', 'second' => 'second answer']);
 check(pages() === [1 => ['normal', 'second']], 'Single-page submission changed layout');
 check(REDCap::$data['survey-record'][1] === ['normal' => 'first answer', 'second' => 'second answer', 'captcha' => 'answer'], 'Single-page submission lost answers/capture');
+Project::$questionBySection = true;
 Project::$headers = ['normal' => 'Section 1', 'second' => 'Section 2'];
 
 // Saving before answering any survey question still captures the CAPTCHA and

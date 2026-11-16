@@ -84,7 +84,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$instrument = $context["instrument"] = $context["form_name"]; // Rename and augment for use in ActionTagHelper
 		$context["record"] = null;
 		$context["instance"] = 1;
-		list($page_fields, $total_pages) = \Survey::getPageFields($instrument, true);
+		list($page_fields, $total_pages) = \Survey::getPageFields(
+			$instrument, $Proj->surveys[$context['survey_id']]['question_by_section']
+		);
 		// Existing responses carry a REDCap-authenticated response hash, not just a page number.
 		$response_hash = $_POST['__response_hash__'] ?? null;
 		if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['__endpublicsurvey'])) {

@@ -67,7 +67,7 @@ Save errors and warnings appear inside the editor. Successful saves use a module
 
 ## Basic Setup
 
-1. Put a Text Box field with no validation on the first page of the public survey instrument.
+1. Put a Text Box field with no validation on the first page of the public survey instrument. If all questions are displayed on one page, the field can be in any section. If each section is displayed on a separate page, the field must be in the first section.
 2. Add `@NEDCAPTCHA` to that field.
 3. Use the field label as the prompt shown above the challenge.
 4. Click the action tag in the Online Designer to configure the CAPTCHA type and options.
@@ -227,9 +227,8 @@ For example:
 
 ### 1.1.4 Release Readiness
 
-The code review on 2026-11-16 found the following issues requiring correction before release:
+The following issues from the code review on 2026-11-16 still require correction before release:
 
-- CAPTCHA discovery always treats section headers as page boundaries, even when survey pagination is disabled. A tagged field after the first section is therefore ignored on a single-page survey. Until corrected, put all nedCAPTCHA fields in the first section, even on surveys that display all questions on one page.
 - A non-JSON action-tag parameter such as `@NEDCAPTCHA=garbage` disables the CAPTCHA instead of falling back to a protected configuration. Use the editor or validate hand-written parameters against the JSON schema, and verify that the public survey presents a challenge.
 - If the challenge proof expires or the survey session is lost before the first submission, the gate clears the submitted answers and presents a new CAPTCHA. This also affects a first-page Save & Return request; submitted answers are not buffered for later recovery.
 - If editor access is refused while loading settings, such as after a change to draft mode or design rights, the server error is not displayed and the editor can open empty.
@@ -241,7 +240,7 @@ The automated checks pass on PHP 8.4.22, including pagination checks using the l
 
 Install JavaScript test dependencies with `npm ci`, then run `npm test`. PHP and Node.js 18 or newer are needed for these checks; Node.js and the npm packages are not runtime dependencies of the external module.
 
-The suite covers editor saves and notices, in-memory survey-hook requests, and text-math fallback with image creation disabled, including a final fallback when random-number generation is disabled. Pagination regressions cover separate/shared CAPTCHA sections, Next/Previous, validation redisplay, Save & Return from either page, return-code continuation, optional response capture, repeating instances, and capture failures.
+The suite covers editor saves and notices, in-memory survey-hook requests, and text-math fallback with image creation disabled, including a final fallback when random-number generation is disabled. Pagination regressions cover discovery in the first and later sections with pagination enabled or disabled, helper fields across sections on single-page surveys, separate/shared CAPTCHA sections, Next/Previous, validation redisplay, Save & Return from either page, return-code continuation, optional response capture, repeating instances, and capture failures.
 
 To exercise the pagination cases with a local REDCap installation's actual `Survey::getPageFields()` and `Survey::setPageNum()` methods, run `REDCAP_SURVEY_CLASS=/path/to/redcap/Classes/Survey.php php tests/pagination.php`. Database access and record saves remain in-memory doubles; these checks do not execute REDCap's full browser, validation, or persistence pipeline.
 
@@ -249,7 +248,7 @@ To exercise the pagination cases with a local REDCap installation's actual `Surv
 
 Version | Changes
 ------- | -----------
-1.1.4 (planned: 2026-11-16) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Added automated regression checks. Release remains pending the readiness findings above.
+1.1.4 (planned: 2026-11-16) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Added automated regression checks. Release remains pending the readiness findings above.
 1.1.3   | Prevented REDCap calculation JavaScript from running against fields removed from the CAPTCHA-only survey page while retaining branching logic for custom challenges.
 1.1.2   | Removed "Test" link (development artifact).
 1.1.1   | Minor code refactor.
