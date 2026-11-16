@@ -7,6 +7,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	const CLIENT_KEY = "__nedcaptcha2__ck__";
 	const STORE_KEY = "__nedcaptcha2__";
 	const CHALLENGE_SESSION_KEY = '__nedcaptcha2_challenges__';
+	const PENDING_SUBMISSION_SESSION_KEY = '__nedcaptcha2_pending_submissions__';
 	const SESSION_COOKIE_PREFIX = "__nedcaptcha2session__";
 	const SESSION_STORE_KEY = "__nedcaptcha2session__";
 
@@ -63,11 +64,21 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		foreach ($_SESSION[self::CHALLENGE_SESSION_KEY] ?? [] as $key => $issued_at) {
 			if ($issued_at < $cutoff) unset($_SESSION[self::CHALLENGE_SESSION_KEY][$key]);
 		}
+		foreach ($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY] ?? [] as $key => $submission) {
+			if ($submission['created_at'] < $cutoff) unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$key]);
+		}
 		$owned = isset($_SESSION[self::CHALLENGE_SESSION_KEY][$store_key]);
 		$stored = ["expected" => null, "passed" => false];
 		if (!$owned) {
+			$previous_store_key = $store_key;
 			$client_key = \Crypto::getGuid();
 			$store_key = self::STORE_KEY."{$psh}_{$client_key}";
+			// A pending submission in this browser's session survives proof rotation.
+			if (isset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$previous_store_key])) {
+				$submission = $_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$previous_store_key];
+				unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$previous_store_key]);
+				$_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] = $submission;
+			}
 		}
 		if ($owned) {
 			$result = $this->framework->queryLogs("SELECT expected, passed, type, capture_field, capture_response WHERE message = ?", $store_key);
@@ -123,13 +134,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$session_passed = $psh == $sh && isset($tagged[self::AT_SETUP]) && $this->validateSolvedSession($project_id, $psh);
 
 		if ($returning || $existing_response || $stored["passed"] || $session_passed || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
-			if ($owned && $stored['passed'] && !$existing_response && isset($_POST['submit-action'])) {
-				$this->accepted_submission_key = $store_key;
-				$capture_field = $stored['capture_field'] ?? null;
-				if ($capture_field !== null && isset($tagged[self::AT_SETUP][$capture_field], $stored['capture_response'])) {
-					// Keep the verified answer server-side, independently of the survey's page layout.
-					$this->pending_capture = [clone $Proj, $capture_field, $stored['capture_response']];
-				}
+			if ($owned && $stored['passed'] && $psh === $sh && !$returning && !$existing_response && isset($tagged[self::AT_SETUP])) {
+				$this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged);
+				$this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			}
 			// We are outside any context where the CAPTCHA should be shown
 			// Remove the fields
@@ -180,6 +187,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			? $expected == $response
 			: (string)$expected === $response);
 		$passed = $stored["passed"] || $matches;
+		// Hold only a signed first-page survey submission, never the CAPTCHA POST
+		// itself. Keep answers out of the persistent module log and the CAPTCHA HTML.
+		if (!isset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key]) && $this->isRecoverableSubmission($_POST, $save_and_return)) {
+			$_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] = [
+				'created_at' => time(),
+				'post' => $this->filterPendingSubmission($_POST, $Proj, $instrument, $tagged),
+			];
+		}
 		// An unsolved CAPTCHA POST must never reach REDCap's record-saving paths.
 		$_POST = [];
 		$_SERVER['REQUEST_METHOD'] = 'GET';
@@ -209,10 +224,18 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if ($passed) {
 			// CAPTCHA was solved
 			$this->createSolvedSession($project_id, $psh);
+			$resumed = $this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged);
+			if ($resumed) $this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
 			foreach ($this->nedcaptcha_fields as $field) {
 				unset($Proj->metadata[$field]);
 				unset($Proj->forms[$instrument]['fields'][$field]);
+			}
+			if ($resumed) {
+				// REDCap now validates and saves the original submission normally,
+				// including its Save & Return action, before any survey HTML is built.
+				$this->active = false;
+				return;
 			}
 			// Trick REDCap into showing the survey instructions
 			$_SERVER["REQUEST_METHOD"] = "GET";
@@ -230,6 +253,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 
 		// Add client key to form
+		if (isset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key])) {
+			$this->scripts_regular[] = "$('form#form').before($('<div>', {class: 'alert alert-info', role: 'status'}).text('Your answers have been kept temporarily. Complete the CAPTCHA again to continue your submission.'));";
+		}
 		$this->scripts_delayed[] = "$('<input>', {type: 'hidden', name: " . self::encodeJavascriptValue(self::CLIENT_KEY) . "}).val(" . self::encodeJavascriptValue($client_key) . ").insertAfter($('input[name=\"redcap_csrf_token\"]'));";
 
 		// Setup the CAPTCHA for display
@@ -392,6 +418,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// A completed first submission cannot be replayed to create another response.
 		$this->framework->removeLogs('message = ?', $this->accepted_submission_key);
 		unset($_SESSION[self::CHALLENGE_SESSION_KEY][$this->accepted_submission_key]);
+		unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$this->accepted_submission_key]);
 		$this->accepted_submission_key = null;
 	}
 
@@ -622,6 +649,82 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	#endregion
 
 	#region Private Methods
+
+	private function isRecoverableSubmission($post, $save_and_return) {
+		$actions = ['submit-btn-saverecord'];
+		if ($save_and_return) $actions[] = 'submit-btn-savereturnlater';
+		return $_SERVER['REQUEST_METHOD'] === 'POST'
+			&& in_array($post['submit-action'] ?? null, $actions, true)
+			&& in_array($post['__page__'] ?? null, [1, '1'], true)
+			&& is_string($post['__page_hash__'] ?? null)
+			&& \Survey::verifyPageNumHash($post['__page_hash__'], 1);
+	}
+
+	private function filterPendingSubmission($post, $project, $instrument, $tagged) {
+		// Determine the first ordinary page using REDCap's own page calculation,
+		// with the same helper removal used on solved survey requests.
+		$layout = clone $project;
+		$excluded = array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? []));
+		foreach ($excluded as $field) {
+			unset($layout->metadata[$field], $layout->forms[$instrument]['fields'][$field]);
+		}
+		$previous_project = $GLOBALS['Proj'];
+		try {
+			$GLOBALS['Proj'] = $layout;
+			list($pages) = \Survey::getPageFields($instrument, $layout->surveys[$layout->forms[$instrument]['survey_id']]['question_by_section']);
+		}
+		finally {
+			$GLOBALS['Proj'] = $previous_project;
+		}
+		$fields = array_fill_keys($pages[1] ?? [], true);
+		unset($fields[$project->table_pk], $fields[$instrument . '_complete']);
+		$filtered = [];
+		foreach ($post as $name => $value) {
+			$field = $name;
+			if (strpos($name, '__chk__') === 0) {
+				if (strpos($name, '_RC_') === false) continue;
+				list($field) = explode('_RC_', substr($name, 7), 2);
+				if (($project->metadata[$field]['element_type'] ?? '') !== 'checkbox') continue;
+			}
+			if (isset($fields[$field]) && is_string($value)) $filtered[$name] = $value;
+		}
+		// Preserve native validation/upload context, without replaying identity,
+		// participant, prefill, CAPTCHA, CSRF, or arbitrary request controls.
+		foreach (['__start_time__', '__start_time_hash__', '__file_upload_context__', 'file_upload_delete_reason'] as $name) {
+			if (is_string($post[$name] ?? null)) $filtered[$name] = $post[$name];
+		}
+		if (is_array($post['empty-required-field'] ?? null)) {
+			$filtered['empty-required-field'] = array_values(array_filter($post['empty-required-field'], function($field) use ($fields) {
+				return is_string($field) && isset($fields[$field]);
+			}));
+		}
+		$filtered['submit-action'] = $post['submit-action'];
+		$filtered['__page__'] = 1;
+		$filtered['__page_hash__'] = $post['__page_hash__'];
+		return $filtered;
+	}
+
+	private function restorePendingSubmission($store_key, $project, $instrument, $tagged) {
+		$submission = $_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] ?? null;
+		if ($submission === null) return false;
+		// Recheck field eligibility in case the design changed during verification.
+		$_POST = $this->filterPendingSubmission($submission['post'], $project, $instrument, $tagged);
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		foreach (['__add_participant', '__participant_identifier', '__return', '__endpublicsurvey', '__rh', '__endsurvey', '__page__', '__prevpage', '__reqmsg', '__passthru', 'id'] as $flag) {
+			unset($_GET[$flag]);
+		}
+		if ($_POST['submit-action'] === 'submit-btn-savereturnlater') $_GET['__return'] = 1;
+		return true;
+	}
+
+	private function acceptSubmission($store_key, $stored, $project, $tagged) {
+		if (!isset($_POST['submit-action'])) return;
+		$this->accepted_submission_key = $store_key;
+		$capture_field = $stored['capture_field'] ?? null;
+		if ($capture_field !== null && isset($tagged[self::AT_SETUP][$capture_field], $stored['capture_response'])) {
+			$this->pending_capture = [clone $project, $capture_field, $stored['capture_response']];
+		}
+	}
 
 	private static function encodeJavascriptValue($value) {
 		return json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

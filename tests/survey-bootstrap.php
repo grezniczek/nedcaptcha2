@@ -32,6 +32,7 @@ namespace {
         public static $saveAndReturn = false;
         public static $questionBySection = true;
         public static $headers = [];
+        public static $fieldTypes = [];
         public static $repeating = '';
         public static $project_cache = [];
         public $metadata = [];
@@ -44,7 +45,7 @@ namespace {
                 return;
             }
             foreach (self::$annotations as $field => $annotation) {
-                $this->metadata[$field] = ['misc' => $annotation, 'element_label' => 'Label', 'form_name' => 'form_1', 'element_preceding_header' => self::$headers[$field] ?? ''];
+                $this->metadata[$field] = ['misc' => $annotation, 'element_label' => 'Label', 'form_name' => 'form_1', 'element_preceding_header' => self::$headers[$field] ?? '', 'element_type' => self::$fieldTypes[$field] ?? 'text'];
             }
             $this->forms = ['form_1' => ['survey_id' => 1, 'fields' => array_fill_keys(array_keys($this->metadata), true)]];
             $this->surveys = [1 => ['save_and_return' => self::$saveAndReturn, 'question_by_section' => self::$questionBySection]];
@@ -82,10 +83,13 @@ namespace {
                 return ['', [], ($_GET['__page__'] ?? 1) === $count];
             }
             public static function decryptResponseHash($hash, $participantId) { return $hash === 'valid-response' && $participantId === 10 ? 20 : ''; }
+            public static function getPageNumHash($page) { return hash('sha256', 'test-page-' . $page); }
+            public static function verifyPageNumHash($hash, $page) { return $hash === self::getPageNumHash($page); }
         }
     }
     class Crypto {
-        public static function getGuid() { return '12345678-1234-4234-8234-123456789abc'; }
+        public static $nextGuids = [];
+        public static function getGuid() { return array_shift(self::$nextGuids) ?? '12345678-1234-4234-8234-123456789abc'; }
     }
 
     require_once __DIR__ . '/../NEDCaptcha2ExternalModule.php';

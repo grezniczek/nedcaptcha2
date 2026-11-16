@@ -45,6 +45,8 @@ use DE\RUB\SEG\NEDCaptcha2ExternalModule\NEDCaptcha2ExternalModule as Module;
 
 $GLOBALS['table_pk'] = 'record_id';
 $GLOBALS['__SALT__'] = 'pagination-regression';
+$GLOBALS['password_algo'] = 'sha256';
+$GLOBALS['salt2'] = 'pagination-page-hash';
 $GLOBALS['save_and_return_code_bypass'] = '';
 $GLOBALS['public_survey'] = true;
 $GLOBALS['return_code'] = '';
@@ -57,8 +59,8 @@ $responseHash = getenv('REDCAP_SURVEY_CLASS') ? Survey::encryptResponseHash(20, 
 $continuation = ['__response_hash__' => $responseHash];
 $key = Module::STORE_KEY . 'public-hash_' . Crypto::getGuid();
 
-function surveyRequest($post = [], $get = [], $params = null) {
-    return request($params ?? $GLOBALS['custom'], $post, $get, ['second' => '', 'form_1_complete' => '']);
+function surveyRequest($post = [], $get = [], $params = null, $extra = []) {
+    return request($params ?? $GLOBALS['custom'], $post, $get, $extra + ['second' => '', 'form_1_complete' => '']);
 }
 function pages() {
     [$pages] = Survey::getPageFields('form_1', $GLOBALS['Proj']->surveys[1]['question_by_section']);
@@ -73,17 +75,24 @@ function solve($params = null) {
     check(!isset($GLOBALS['Proj']->metadata['captcha']), 'Solved display still includes CAPTCHA');
     return $module;
 }
-function submit($post, $get = [], $params = null) {
-    $module = surveyRequest($post, $get, $params);
+function submit($post, $get = [], $params = null, $extra = []) {
+    $module = surveyRequest($post, $get, $params, $extra);
+    // Like REDCap, never enter a save path while CAPTCHA verification is pending.
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['submit-action'])) return $module;
+    $submittedPage = $_POST['__page__'] ?? 1;
     [$pages] = Survey::getPageFields('form_1', $GLOBALS['Proj']->surveys[1]['question_by_section']);
     // REDCap Surveys/index.php discards fields that belong to a different page
     // before DataEntry::saveRecord. Apply that boundary before simulating saving.
     foreach ($_POST as $field => $value) {
         if (isset($GLOBALS['Proj']->forms['form_1']['fields'][$field]) && $field !== 'record_id' && $field !== 'form_1_complete'
-            && !in_array($field, $pages[$post['__page__']] ?? [], true)) unset($_POST[$field]);
+            && !in_array($field, $pages[$submittedPage] ?? [], true)) unset($_POST[$field]);
     }
     foreach ($_POST as $field => $value) {
         if (isset($GLOBALS['Proj']->forms['form_1']['fields'][$field])) REDCap::$data['survey-record'][1][$field] = $value;
+        elseif (strpos($field, '__chk__') === 0) {
+            list($field, $choice) = explode('_RC_', substr($field, 7), 2);
+            if (isset($GLOBALS['Proj']->forms['form_1']['fields'][$field])) REDCap::$data['survey-record'][1][$field][$choice] = $value;
+        }
     }
     $surveyProject = $GLOBALS['Proj'];
     $cachedProject = Project::$project_cache[355];
@@ -244,4 +253,186 @@ foreach (['form', 'event'] as $repeating) {
     check(REDCap::$data['survey-record']['repeat_instances'][1][$repeatForm][3]['captcha'] === 'answer', 'Capture saved to wrong repeating instance');
 }
 
-echo 'Pagination and Save & Return regressions passed (' . (getenv('REDCAP_SURVEY_CLASS') ? 'native REDCap page methods' : 'in-memory page methods') . ").\n";
+// First submissions survive expiry/session loss, without saving anything before
+// re-verification. Exercise both normal submission and Save & Return Later.
+Project::$repeating = '';
+Project::$fieldTypes = ['choices' => 'checkbox'];
+$extra = ['notes' => '', 'zero' => '', 'choices' => '', 'required' => ''];
+$freshGuid = '12345678-1234-4234-8234-123456789abd';
+$freshKey = Module::STORE_KEY . 'public-hash_' . $freshGuid;
+$pendingKey = Module::PENDING_SUBMISSION_SESSION_KEY;
+$recoveries = 0;
+foreach ([false, true] as $paginated) {
+    Project::$questionBySection = $paginated;
+    Project::$headers = ['normal' => 'Questions', 'second' => 'More questions'];
+    foreach (['expired', 'lost-session', 'missing-log'] as $loss) {
+        foreach (['submit-btn-saverecord', 'submit-btn-savereturnlater'] as $action) {
+            foreach ([false, true] as $capture) {
+                $case = ($paginated ? 'paginated' : 'single-page') . "/$loss/$action/capture=" . (int)$capture;
+                $params = array_replace($custom, ['capture' => $capture]);
+                $_SESSION = [];
+                SurveyFramework::$logs = [];
+                REDCap::$data = REDCap::$saves = [];
+                surveyRequest([], [], $params, $extra);
+                surveyRequest($proof + ['captcha' => 'answer'], [], $params, $extra);
+                if ($loss === 'expired') $_SESSION[Module::CHALLENGE_SESSION_KEY][$key] = time() - 7201;
+                elseif ($loss === 'lost-session') $_SESSION = [];
+                else unset(SurveyFramework::$logs[$key]);
+                $expectedKey = $loss === 'missing-log' ? $key : $freshKey;
+                $newProof = [Module::CLIENT_KEY => $loss === 'missing-log' ? Crypto::getGuid() : $freshGuid];
+                if ($loss !== 'missing-log') Crypto::$nextGuids = [$freshGuid];
+                $unsafe = '</script><script>window.recovered=true</script>&"';
+                $answers = ['normal' => $unsafe, 'notes' => "First line\nSecond line: ü", 'zero' => '0', 'required' => '',
+                    '__chk__choices_RC_1' => '1', '__chk__choices_RC_2' => ''];
+                $controls = ['submit-action' => $action, '__page__' => '1', '__page_hash__' => Survey::getPageNumHash(1),
+                    '__start_time__' => '2026-11-16 10:00:00', '__start_time_hash__' => 'signed-start',
+                    '__file_upload_context__' => 'native-upload-ticket', 'file_upload_delete_reason' => 'Original reason',
+                    'empty-required-field' => ['required', 'record_id', 'captcha', 'unrelated', ['invalid']]];
+                $forged = ['record_id' => 'someone-else', 'form_1_complete' => '2', 'captcha' => 'tampered',
+                    '__GROUPID__' => '3', '__response_id__' => '999', '__code' => 'forged', '__prefill' => '1',
+                    'redcap_csrf_token' => 'old-token', 'unrelated' => 'forged', '__chk__choices' => 'malformed'];
+                $original = $proof + $answers + $controls + $forged;
+                if ($paginated) $original['second'] = 'later-page injection';
+                else $original['second'] = 'second section answer';
+                $module = submit($original, ['__return' => 1, '__add_participant' => 'forged@example.org', 'id' => 'someone-else'], $params, $extra);
+                check(property($module, 'active') && $_POST === [] && $_SERVER['REQUEST_METHOD'] === 'GET', "$case: stale submission reached saving");
+                check(REDCap::$data === [] && REDCap::$saves === [], "$case: answers were saved before verification");
+                $pending = $_SESSION[$pendingKey][$expectedKey]['post'] ?? null;
+                check($pending !== null && array_intersect_key($pending, $answers) === $answers, "$case: submitted answers were not buffered exactly");
+                check($pending['submit-action'] === $action && $pending['empty-required-field'] === ['required'], "$case: submit action/required-field context lost");
+                foreach (array_keys($forged) as $name) check(!array_key_exists($name, $pending), "$case: unsafe control was buffered: $name");
+                check(isset($pending['second']) === !$paginated, "$case: buffering ignored the first-page boundary");
+                $scripts = implode("\n", array_merge(property($module, 'scripts_top'), property($module, 'scripts_regular'), property($module, 'scripts_delayed')));
+                check(strpos($scripts, $unsafe) === false && strpos(serialize(SurveyFramework::$logs), $unsafe) === false, "$case: answers leaked into script output/module logs");
+                check(strpos($scripts, 'Your answers have been kept temporarily') !== false, "$case: recovery notice missing");
+
+                // CAPTCHA retries cannot replace the held answers or the original action.
+                submit($newProof + ['captcha' => 'wrong', 'normal' => 'replacement', 'submit-action' => 'submit-btn-saverecord'], [], $params, $extra);
+                check($_POST === [] && REDCap::$data === [], "$case: wrong answer saved pending data");
+                check($_SESSION[$pendingKey][$expectedKey]['post'] === $pending, "$case: retry changed pending answers");
+                // A different browser cannot retrieve/submit another browser's pending data.
+                $browserSession = $_SESSION;
+                $_SESSION = [];
+                Crypto::$nextGuids = ['12345678-1234-4234-8234-123456789abe'];
+                submit($newProof + ['captcha' => 'answer'], [], $params, $extra);
+                check($_POST === [] && REDCap::$data === [] && empty($_SESSION[$pendingKey]), "$case: another browser recovered pending answers");
+                $_SESSION = $browserSession;
+
+                $module = submit($newProof + ['captcha' => 'answer', 'normal' => 'replacement', 'submit-action' => 'submit-btn-saverecord'], [], $params, $extra);
+                check(!property($module, 'active') && $_SERVER['REQUEST_METHOD'] === 'POST', "$case: solved recovery did not resume native saving");
+                check($_POST['submit-action'] === $action && $_POST['__page__'] === 1 && $_POST['__page_hash__'] === Survey::getPageNumHash(1), "$case: native submission controls changed");
+                check(isset($_GET['__return']) === ($action === 'submit-btn-savereturnlater'), "$case: Save & Return intent changed");
+                check(!isset($_GET['__add_participant']) && !isset($_GET['id']), "$case: unsafe query controls were restored");
+                foreach ($answers as $name => $value) check($_POST[$name] === $value, "$case: answer changed during recovery: $name");
+                foreach (['__start_time__', '__start_time_hash__', '__file_upload_context__', 'file_upload_delete_reason'] as $name) {
+                    check($_POST[$name] === $controls[$name], "$case: native context lost: $name");
+                }
+                foreach (array_keys($forged) as $name) check(!array_key_exists($name, $_POST), "$case: unsafe control was replayed: $name");
+                $data = REDCap::$data['survey-record'][1];
+                check($data['normal'] === $unsafe && $data['notes'] === $answers['notes'] && $data['zero'] === '0', "$case: native save lost text answers");
+                check($data['choices'] === ['1' => '1', '2' => ''], "$case: native checkbox controls lost");
+                check(isset($data['captcha']) === $capture, "$case: capture option changed during recovery");
+                if ($capture) check($data['captcha'] === 'answer', "$case: capture used the stale/tampered answer");
+                check(!isset($_SESSION[$pendingKey][$expectedKey]) && !isset(SurveyFramework::$logs[$expectedKey]), "$case: saved buffer/proof were not consumed");
+                check(!isset($_SESSION[Module::CHALLENGE_SESSION_KEY][$expectedKey]), "$case: saved proof ownership remained");
+                check(pages() === ($paginated ? [1 => ['normal', 'notes', 'zero', 'choices', 'required'], 2 => ['second']] : [1 => ['normal', 'notes', 'zero', 'choices', 'required', 'second']]), "$case: recovered page layout changed");
+                if ($action === 'submit-btn-saverecord' && $paginated) check(navigate() == 2, "$case: recovered Next skipped a page");
+                if ($action === 'submit-btn-savereturnlater') {
+                    surveyRequest(['__code' => 'return-code'], [], $params, $extra);
+                    $GLOBALS['return_code'] = 'return-code';
+                    $GLOBALS['lastSavedField'] = 'normal';
+                    $_GET += ['event_id' => 1, 'instance' => 1, 'page' => 'form_1'];
+                    check(navigate() == 1, "$case: Save & Return resumed on the wrong page");
+                    $GLOBALS['return_code'] = '';
+                }
+                $saved = REDCap::$data;
+                submit($newProof + ['captcha' => 'answer'], [], $params, $extra);
+                check($_POST === [] && REDCap::$data === $saved, "$case: consumed recovery was replayed");
+                $recoveries++;
+            }
+        }
+    }
+}
+
+// Forged page/control values must not turn a challenge POST into a buffered save.
+$recoverablePost = $proof + ['normal' => 'held answer', 'submit-action' => 'submit-btn-saverecord', '__page__' => 1, '__page_hash__' => Survey::getPageNumHash(1)];
+foreach ([['__page_hash__' => 'forged'], ['__page_hash__' => []], ['__page__' => 2, '__page_hash__' => Survey::getPageNumHash(2)],
+    ['submit-action' => 'submit-btn-deleteform'], ['submit-action' => []]] as $invalid) {
+    $_SESSION = [];
+    SurveyFramework::$logs = [];
+    REDCap::$data = REDCap::$saves = [];
+    submit(array_replace($recoverablePost, $invalid));
+    check($_POST === [] && empty($_SESSION[$pendingKey]) && REDCap::$data === [], 'Invalid submission controls created a pending save');
+}
+Project::$saveAndReturn = false;
+$_SESSION = [];
+submit(array_replace($recoverablePost, ['submit-action' => 'submit-btn-savereturnlater']));
+check(empty($_SESSION[$pendingKey]), 'Disabled Save & Return action was buffered');
+Project::$saveAndReturn = true;
+
+// Two tabs retain independent answers. A renewed proof can rotate again while
+// its pending answers are still fresh, and consuming it leaves the other tab alone.
+$_SESSION = [];
+SurveyFramework::$logs = [];
+REDCap::$data = REDCap::$saves = [];
+Crypto::$nextGuids = [$freshGuid];
+submit($recoverablePost);
+$held = $_SESSION[$pendingKey][$freshKey];
+$otherGuid = '12345678-1234-4234-8234-123456789abe';
+$otherKey = Module::STORE_KEY . 'public-hash_' . $otherGuid;
+Crypto::$nextGuids = [$otherGuid];
+submit(array_replace($recoverablePost, ['normal' => 'other tab answer']));
+check($_SESSION[$pendingKey][$freshKey] === $held && $_SESSION[$pendingKey][$otherKey]['post']['normal'] === 'other tab answer', 'A second tab overwrote held answers');
+$_SESSION[Module::CHALLENGE_SESSION_KEY][$freshKey] = time() - 7201;
+$rotatedGuid = '12345678-1234-4234-8234-123456789abf';
+$rotatedKey = Module::STORE_KEY . 'public-hash_' . $rotatedGuid;
+Crypto::$nextGuids = [$rotatedGuid];
+submit([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'wrong']);
+check(!isset($_SESSION[$pendingKey][$freshKey]) && $_SESSION[$pendingKey][$rotatedKey] === $held, 'Proof rotation dropped pending answers');
+submit([Module::CLIENT_KEY => $rotatedGuid, 'captcha' => 'answer']);
+check(REDCap::$data['survey-record'][1]['normal'] === 'held answer' && !isset($_SESSION[$pendingKey][$rotatedKey]), 'Rotated recovery did not save/consume the original answers');
+check($_SESSION[$pendingKey][$otherKey]['post']['normal'] === 'other tab answer', 'Saving one tab consumed another tab\'s answers');
+
+// Buffers have the same two-hour retention bound as CAPTCHA proof.
+$_SESSION[$pendingKey][$otherKey]['created_at'] = time() - 7201;
+surveyRequest();
+check(!isset($_SESSION[$pendingKey][$otherKey]), 'Expired pending answers were retained');
+
+// Recovery also works for generated math and for a native validation redisplay
+// that has not yet called the save hook. Re-verify before the first resumed POST.
+$_SESSION = [];
+SurveyFramework::$logs = [];
+REDCap::$data = REDCap::$saves = [];
+$math = ['type' => 'math', 'showAsText' => true, 'capture' => true];
+Crypto::$nextGuids = [$freshGuid];
+submit($recoverablePost, [], $math);
+$mathAnswer = SurveyFramework::$logs[$freshKey]['expected'];
+$module = surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => $mathAnswer], [], $math);
+check($_POST['normal'] === 'held answer' && $_SERVER['REQUEST_METHOD'] === 'POST', 'Math recovery did not restore the held submission');
+check(isset($_SESSION[$pendingKey][$freshKey]) && REDCap::$data === [], 'Unsaved recovery consumed pending answers');
+foreach ([['s' => 'private-hash'], ['__return' => 1]] as $outside) {
+    surveyRequest([Module::CLIENT_KEY => $freshGuid], $outside, $math);
+    check(!isset($_POST['normal']) && isset($_SESSION[$pendingKey][$freshKey]), 'An unrelated survey flow restored pending answers');
+}
+surveyRequest([Module::CLIENT_KEY => $freshGuid, '__response_hash__' => $responseHash], [], $math);
+check(!isset($_POST['normal']) && isset($_SESSION[$pendingKey][$freshKey]), 'An existing response inherited a pending new submission');
+submit([Module::CLIENT_KEY => $freshGuid], [], $math);
+check(REDCap::$data['survey-record'][1]['normal'] === 'held answer' && REDCap::$data['survey-record'][1]['captcha'] === $mathAnswer, 'Verified recovery retry lost its answers/capture');
+check(!isset($_SESSION[$pendingKey][$freshKey]), 'Verified retry did not consume the buffer');
+foreach (['errors', 'throw'] as $failure) {
+    $_SESSION = [];
+    SurveyFramework::$logs = [];
+    REDCap::$data = REDCap::$saves = [];
+    Crypto::$nextGuids = [$freshGuid];
+    submit($recoverablePost, [], $math);
+    $mathAnswer = SurveyFramework::$logs[$freshKey]['expected'];
+    REDCap::$failure = $failure;
+    submit([Module::CLIENT_KEY => $freshGuid, 'captcha' => $mathAnswer], [], $math);
+    check(REDCap::$data['survey-record'][1]['normal'] === 'held answer', 'Capture failure lost recovered survey answers');
+    check(!isset($_SESSION[$pendingKey][$freshKey]) && !isset(SurveyFramework::$logs[$freshKey]), 'Capture failure retained a saved buffer/proof');
+    check(isset(SurveyFramework::$logs['CAPTCHA response capture failed']), 'Recovery capture failure was not logged');
+    REDCap::$failure = null;
+}
+Project::$fieldTypes = [];
+
+echo 'Pagination, Save & Return, and ' . $recoveries . ' submission-recovery cases passed (' . (getenv('REDCAP_SURVEY_CLASS') ? 'native REDCap page methods' : 'in-memory page methods') . ").\n";
