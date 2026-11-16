@@ -4,6 +4,8 @@
 
 nedCAPTCHA 2 adds CAPTCHA protection to REDCap public surveys without depending on an external CAPTCHA provider. The name stands for **n**o **e**xternal **d**ependencies.
 
+Release metadata is prepared for **1.1.4**, with a planned release date of **2026-11-16**. Resolve the [release readiness findings](#114-release-readiness) before publishing.
+
 This is a new version of [nedCAPTCHA](https://github.com/grezniczek/redcap_nedcaptcha). It uses action-tagged fields on the first survey page instead of a fixed module-level CAPTCHA page, which allows more project-specific layout, field embedding, and compatibility with REDCap Multi-Language Management.
 
 ## Purpose
@@ -223,12 +225,17 @@ For example:
 - Solved CAPTCHA sessions are disabled by default. When disabled, opening the same public survey in a new tab requires solving the CAPTCHA again.
 - When solved CAPTCHA sessions are enabled, the solved state is stored as an opaque browser cookie backed by server-side session metadata. It applies only to the same browser and the same project public survey.
 
-### Current Development Review Limitations
+### 1.1.4 Release Readiness
 
-The unreleased changes still have the following issues requiring correction before release:
+The code review on 2026-11-16 found the following issues requiring correction before release:
 
+- CAPTCHA discovery always treats section headers as page boundaries, even when survey pagination is disabled. A tagged field after the first section is therefore ignored on a single-page survey. Until corrected, put all nedCAPTCHA fields in the first section, even on surveys that display all questions on one page.
+- A non-JSON action-tag parameter such as `@NEDCAPTCHA=garbage` disables the CAPTCHA instead of falling back to a protected configuration. Use the editor or validate hand-written parameters against the JSON schema, and verify that the public survey presents a challenge.
 - If the challenge proof expires or the survey session is lost before the first submission, the gate clears the submitted answers and presents a new CAPTCHA. This also affects a first-page Save & Return request; submitted answers are not buffered for later recovery.
 - If editor access is refused while loading settings, such as after a change to draft mode or design rights, the server error is not displayed and the editor can open empty.
+- GD rendering passes fractional values to integer parameters, producing precision-loss deprecations on PHP 8.4. If an installation converts these deprecations to exceptions, image challenges fall back to text math. Explicit integer conversion is needed before claiming clean compatibility with these PHP versions.
+
+The automated checks pass on PHP 8.4.22, including pagination checks using the local REDCap survey class. They do not cover all findings above or replace a browser test through REDCap's full survey saving pipeline.
 
 ### Development Checks
 
@@ -242,12 +249,12 @@ To exercise the pagination cases with a local REDCap installation's actual `Surv
 
 Version | Changes
 ------- | -----------
-Unreleased | Fixed bare-tag saves; enforced case-sensitive module tags; replaced shared editor toasts; preserved edits made during saves; escaped dynamic output; validated operand ranges; made custom-answer comparison literal; decoded embedding keys; made custom helper fields optional; added design/draft checks and redacted configuration audit events; added text-math rendering fallback and browser-bound submission proof; kept page numbering consistent across submissions and Save & Return while saving captured responses separately. See the development review limitations above.
-1.0.0   | Initial release.
-1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
-1.1.1   | Minor code refactor.
-1.1.2   | Removed "Test" link (development artifact).
+1.1.4 (planned: 2026-11-16) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Added automated regression checks. Release remains pending the readiness findings above.
 1.1.3   | Prevented REDCap calculation JavaScript from running against fields removed from the CAPTCHA-only survey page while retaining branching logic for custom challenges.
+1.1.2   | Removed "Test" link (development artifact).
+1.1.1   | Minor code refactor.
+1.1.0   | New feature: Configurable solved CAPTCHA sessions.<br>Minor PHP 8.5 compatibility fixes.
+1.0.0   | Initial release.
 
 ## How to Cite This Work
 
@@ -255,7 +262,7 @@ If you use this external module for a project that generates a research output, 
 
 APA style:
 
-> Rezniczek, G. A. (2026). nedCAPTCHA 2 (REDCap External Module) [Computer software]. https://doi.org/10.5281/zenodo.20492803
+> Rezniczek, G. A. (2026). nedCAPTCHA 2 (REDCap External Module) (Version 1.1.4) [Computer software]. https://doi.org/10.5281/zenodo.20492803
 
 BibTeX:
 
@@ -263,12 +270,13 @@ BibTeX:
 @software{Rezniczek_nedCAPTCHA_REDCap_External_Module_2026,
   author = {Rezniczek, Günther A.},
   title = {{nedCAPTCHA 2 (REDCap External Module)}},
-  version = {1.1.3},
+  version = {1.1.4},
   year = {2026},
-  month = {7},
+  month = {11},
+  date = {2026-11-16},
   doi = {10.5281/zenodo.20492803},
   url = {https://github.com/grezniczek/nedcaptcha2}
 }
 ```
 
-Citation metadata is also available in [CITATION.cff](CITATION.cff).
+Citation metadata is also available in [CITATION.cff](CITATION.cff). These examples are prepared for the planned 1.1.4 release dated 2026-11-16; update the date if publication is delayed. The DOI above identifies the software archive across all versions, rather than a version-specific 1.1.4 deposit. After publication, use the version-specific DOI from Zenodo when citing that exact archived release.

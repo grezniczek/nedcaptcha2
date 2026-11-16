@@ -18,7 +18,7 @@
       "default": "math"
     },
     "capture": {
-      "description": "Store the submitted CAPTCHA response in the @NEDCAPTCHA field after a successful challenge.",
+      "description": "Keep the verified CAPTCHA response server-side after a successful challenge and save it in the @NEDCAPTCHA field when the first survey submission is saved, including Save & Return Later.",
       "type": "boolean",
       "default": false
     },
