@@ -6,13 +6,23 @@ if ($is_plugin) {
 	$ih = InjectionHelper::init($module);
 	$ih->css("css/nedCAPTCHA2.css");
 	$defaults = $module->validate_params("{}", true);
-	$custom_pairs = "";
-	foreach ($defaults["custom"] ?? [] as $pair) {
-		$custom_pairs .= $pair["challenge"] . "=" . $pair["response"] . "\n";
-	}
 }
 
-
+// Keep settings structured in the AJAX payload. Use JSON for editing only when
+// a pair cannot be represented exactly in the usual one-pair-per-line format.
+$custom_pairs = '';
+$custom_json = false;
+foreach ($defaults['custom'] as $pair) {
+	$challenge = $pair['challenge'];
+	$response = $pair['response'];
+	if (strpbrk($challenge, "=\r\n") !== false || strpbrk($response, "\r\n") !== false
+		|| trim($challenge) !== $challenge || trim($response) !== $response) {
+		$custom_json = true;
+		$custom_pairs = json_encode($defaults['custom'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		break;
+	}
+	$custom_pairs .= $challenge . '=' . $response . "\n";
+}
 ?>
 <div class="nedCAPTCHA-setup-container">
 	<div class="nedCAPTCHA-setup-main">
@@ -151,10 +161,14 @@ if ($is_plugin) {
 			<div class="nedCAPTCHA-setup-title">Custom Challenge/Response Options</div>
 			<div class="nedCAPTCHA-setup-group">
 				<div class="nedCAPTCHA-setup-description">
+					<?php if ($custom_json) { ?>
+					Edit the JSON list of challenge and response strings to preserve their exact text.
+					<?php } else { ?>
 					Enter pairs of challenges (displayed to the survey respondent) and responses (the expected answers), separated by the equal signs (=), one pair per line. For the CAPTCHA, a random pair will be chosen.
+					<?php } ?>
 				</div>
 				<div class="mt-2">
-						<textarea id="nedCAPTCHA-custom" name="custom" class="form-control form-control-sm" placeholder="Challenge = Response" rows="20"><?=htmlspecialchars($custom_pairs, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')?></textarea>
+						<textarea id="nedCAPTCHA-custom" name="custom" data-format="<?=$custom_json ? 'json' : 'lines'?>" class="form-control form-control-sm" placeholder="Challenge = Response" rows="20"><?=htmlspecialchars($custom_pairs, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')?></textarea>
 				</div>
 				<div class="form-check mt-2">
 					<input class="form-check-input" type="checkbox" name="caseInsensitive" id="nedCAPTCHA-caseInsensitive" <?=$defaults["caseInsensitive"] ? "checked" : ""?>>

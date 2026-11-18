@@ -191,6 +191,8 @@ The color of grass? = green
 Snow White and the __?__ dwarfs = seven
 ```
 
+If a stored challenge contains an equals sign, or a pair contains line breaks or surrounding whitespace, the editor shows the pairs as a JSON list so their exact text can be edited. Changing another setting preserves the original pairs.
+
 The module randomly selects one pair. Challenges are displayed as escaped plain text; use `@NEDCAPTCHA-CUSTOM-EMBED` with descriptive fields for formatted content or images. JSON string parameters for embedding keys are decoded, so escaped quotes, backslashes, and Unicode escapes can match the challenge text.
 
 Leading and trailing whitespace is trimmed from responses. Otherwise, custom responses are compared as text: leading zeros are significant, and scientific-notation strings are not treated as equivalent numbers. By default, comparison is case-sensitive. Enable **Use case-insensitive comparison for responses** to accept answers regardless of case. The custom helper fields are optional.

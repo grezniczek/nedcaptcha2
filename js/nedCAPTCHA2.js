@@ -134,9 +134,18 @@ function edit(field) {
 					click: function() {
 						if (saving) return;
 						if (dirty) {
-							saving = true;
 							const submittedRevision = revision;
 							const submittedParams = JSON.parse(JSON.stringify(data.params));
+							if (typeof submittedParams.custom === 'string' && $('#nedCAPTCHA-custom').attr('data-format') === 'json') {
+								try {
+									submittedParams.custom = JSON.parse(submittedParams.custom);
+									if (!Array.isArray(submittedParams.custom)) throw new Error();
+								} catch {
+									showNotice('nedCAPTCHA WARNING', ['Enter a JSON list of challenge and response pairs.'], 'warning');
+									return;
+								}
+							}
+							saving = true;
 							config.JSMO.ajax('set-params', { 'field': field, 'params': submittedParams })
 							.then(function(response) {
 								if (closed) return;

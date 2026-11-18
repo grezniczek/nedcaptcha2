@@ -520,15 +520,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$defaults = $this->validate_params($tagged[$field][0], true);
 			unset($defaults["debug"]);
 			$valid_keys = array_keys($defaults);
-			// Convert custom to string
-			$custom_pairs = "";
-			foreach ($defaults["custom"] ?? [] as $pair) {
-				$custom_pairs .= $pair["challenge"] . "=" . $pair["response"] . "\n";
-			}
-			$params["custom"] = $defaults["custom"] = $custom_pairs;
-
-
-
 			// Generate HTML by capturing the output from including setup-ui.php
 			ob_start();
 			require "setup-ui.php";
@@ -557,9 +548,9 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$defaults = $this->validate_params(["type" => "math"], true);
 			$this->warnings = [];
 			// Convert custom challenge-response pairs to array
-			if (isset($payload["params"]["custom"])) {
+			if (is_string($payload["params"]["custom"] ?? null)) {
 				$custom_array = [];
-				$custom_string = trim("{$payload["params"]["custom"]}");
+				$custom_string = trim($payload["params"]["custom"]);
 				if ($custom_string != "") {
 					$pairs = explode("\n", $custom_string);
 					$line = 0;

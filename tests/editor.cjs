@@ -91,6 +91,26 @@ test('only the exact uppercase setup tag receives an editor link', async t => {
     assert.equal($('a.nedCAPTCHA-OD-link').length, 1);
 });
 
+test('JSON pair edits are validated and sent as structured text pairs', async t => {
+    const f = await fixture(t);
+    f.state.loadResult = {
+        params: { type: 'custom', custom: [{ challenge: '1 + 1 = ?', response: '2' }] },
+        keys: ['custom'], html: '<textarea id="nedCAPTCHA-custom" data-format="json" name="custom"></textarea>',
+        errors: [], warnings: []
+    };
+    await f.open();
+    const field = f.editor().find('textarea');
+    field.val('[').trigger('input');
+    f.update();
+    assert.equal(f.state.requests.length, 1);
+    assert.match(f.editor().text(), /Enter a JSON list/);
+    const pairs = [{ challenge: '2 + 2 = ?', response: '4' }];
+    field.val(JSON.stringify(pairs)).trigger('input');
+    f.update();
+    await tick();
+    assert.deepEqual(f.state.requests[1].payload.params.custom, pairs);
+});
+
 for (const [reason, message] of [
     ['permission', 'Design rights are required to edit CAPTCHA settings.'],
     ['draft mode', 'Enter editable draft mode before changing CAPTCHA settings in a production project.']

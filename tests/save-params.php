@@ -261,8 +261,17 @@ namespace {
         null, null, null, null, null, null, null, null, null, null, null
     );
     check(strpos($response['html'], $text) === false, 'Custom text escaped its textarea');
-    check(strpos($response['html'], htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) !== false, 'Custom text was not HTML encoded');
-    check(strpos($response['params']['custom'], $text) === 0, 'Editable custom text was changed');
+    check(strpos($response['html'], '&lt;/textarea&gt;') !== false, 'Custom text was not HTML encoded');
+    check($response['params']['custom'][0]['challenge'] === $text, 'Editable custom text was changed');
+    $pairs = [['challenge' => '2 + 2 = ?', 'response' => '4'], ['challenge' => "Two\nlines", 'response' => 'a=b']];
+    $annotation = '@NEDCAPTCHA=' . json_encode(['type' => 'custom', 'custom' => $pairs]);
+    Project::$annotation = $annotation;
+    ActionTagHelper::$cache = [];
+    $loaded = $module->redcap_module_ajax('get-params', ['field' => 'nc2_resp'], 355, ...array_fill(0, 11, null));
+    check(strpos($loaded['html'], 'data-format="json"') !== false, 'Ambiguous pairs opened in line format');
+    $result = save($annotation, ['capture' => true] + $loaded['params']);
+    $saved = ActionTagHelper::parseActionTags($GLOBALS['save_query'][1][0], '@NEDCAPTCHA');
+    check(!$result['errors'] && json_decode($saved[0]['params'], true)['custom'] === $pairs, 'Unrelated edit changed custom pairs');
     $checks++;
 
     foreach ([[false, true, 0, false], [true, false, 0, false], [true, true, 1, false], [true, true, 2, true]] as [$authenticated, $design, $status, $draft]) {
