@@ -24,45 +24,25 @@ class Color implements JsonSerializable
      * @return Color      The corresponding color, or the default color (fallback = red)
      */
     public static function Parse($input, $default = null) {
-        if ($default === null) {
-            $default = new Color(255, 0, 0);
+        return self::tryParse($input) ?? self::tryParse($default) ?? new Color(255, 0, 0);
+    }
+
+    public static function tryParse($input) {
+        if (!is_string($input)) return null;
+        $input = trim($input);
+        if (preg_match('/^#?([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})?$/iD', $input, $m)) {
+            return new Color(hexdec($m[1]), hexdec($m[2]), hexdec($m[3]), hexdec($m[4] ?? 'ff') / 255);
         }
-        else {
-            $default = self::Parse($default);
+        if (preg_match('/^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(1|0(?:\.\d+)?))?$/D', $input, $m)
+            && max((int)$m[1], (int)$m[2], (int)$m[3]) <= 255) {
+            return new Color((int)$m[1], (int)$m[2], (int)$m[3], (float)($m[4] ?? 1));
         }
-        if (strpos($input, ",")) {
-            // RegEx for r,g,b[,a] format.
-            $re = '/\s*(?\'r\'\d+)\s*,\s*(?\'g\'\d+)\s*,\s*(?\'b\'\d+)\s*(,\s*(?\'a\'(1|0\.?\d*)))?/m';
-            preg_match_all($re, $input, $matches, PREG_SET_ORDER, 0);
-            if (count($matches) == 1) {
-                $r = $matches[0]["r"] * 1;
-                $g = $matches[0]["g"] * 1;
-                $b = $matches[0]["b"] * 1;
-                $a = isset($matches[0]["a"]) ? $matches[0]["a"] * 1 : 1.0;
-                $color = new Color($r, $g, $b, $a);
-                return $color;
-            }
-        }
-        else {
-            // RegEx for #rrggbb[aa] format.
-            $re = '/#?(?\'r\'[0-9a-fA-F]{2})(?\'g\'[0-9a-fA-F]{2})(?\'b\'[0-9a-fA-F]{2})(?\'a\'[0-9a-fA-F]{2})?/m';
-            preg_match_all($re, $input, $matches, PREG_SET_ORDER, 0);
-            if (count($matches) == 1) {
-                $r = hexdec($matches[0]["r"]);
-                $g = hexdec($matches[0]["g"]);
-                $b = hexdec($matches[0]["b"]);
-                $a = isset($matches[0]["a"]) ? hexdec($matches[0]["a"]) : 255;
-                $a = $a / 255;
-                $color = new Color($r, $g, $b, $a);
-                return $color;
-            }
-        }        
-        return $default;
+        return null;
     }
 
 	public function getHex() {
 		if ($this->A < 1) {
-			return sprintf('#%02X%02X%02X%02X', $this->R, $this->G, $this->B, $this->A * 255);
+			return sprintf('#%02X%02X%02X%02X', $this->R, $this->G, $this->B, (int)round($this->A * 255));
 		}
 		return sprintf('#%02X%02X%02X', $this->R, $this->G, $this->B);
 	}

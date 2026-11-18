@@ -13,11 +13,13 @@ namespace {
     $key = NEDCaptcha2ExternalModule::STORE_KEY . 'public-hash_' . Crypto::getGuid();
     // Hand-written invalid parameters must still gate the survey with solvable math.
     foreach (['garbage', 'null', 'false', 'true', '"none"', '["none"]', '{"type":',
+        ['type' => 'custom', 'custom' => [['challenge' => 'Key?', 'response' => " \t"]]],
+        ['type' => 'custom', 'custom' => [['challenge' => [], 'response' => 'answer']]],
         '{"type":true}', '{"type":1}', '{"type":0}', '{"type":null}', '{"type":[]}', '{"type":"unknown"}'] as $invalid) {
         $_SESSION = [];
         SurveyFramework::$logs = [];
         $module = request($invalid);
-        check(property($module, 'active') && !isset($GLOBALS['Proj']->metadata['normal']), 'Invalid parameters exposed the survey: ' . $invalid);
+        check(property($module, 'active') && !isset($GLOBALS['Proj']->metadata['normal']), 'Invalid parameters exposed the survey: ' . json_encode($invalid));
         check(SurveyFramework::$logs[$key]['type'] === 'math' && SurveyFramework::$logs[$key]['expected'] !== '', 'Fallback math challenge missing');
         check(strpos($GLOBALS['Proj']->metadata['captcha']['element_label'], 'nedcaptcha2-challenge') !== false, 'Fallback challenge was not rendered');
         check(property($module, 'errors') === [], 'Configuration recovery must not stop survey initialization');
@@ -32,6 +34,11 @@ namespace {
         request($invalid, $post);
         check($_POST === $post && isset($GLOBALS['Proj']->metadata['normal']), 'Solved fallback did not authorize the first submission');
     }
+    // Invalid colors cannot interrupt survey rendering or disable the challenge.
+    $_SESSION = SurveyFramework::$logs = [];
+    $module = request(['type' => 'custom', 'bgColor' => [], 'textColor' => 'not a color', 'noiseColor' => 42,
+        'custom' => [['challenge' => 'Bad', 'response' => ' '], ['challenge' => 'Key?', 'response' => '0']]]);
+    check(SurveyFramework::$logs[$key]['expected'] === '0' && count(property($module, 'warnings')) === 4, 'Invalid color/pair handling lost the usable challenge');
     // Deliberately selecting the exact type "none" remains supported.
     $_SESSION = [];
     SurveyFramework::$logs = [];

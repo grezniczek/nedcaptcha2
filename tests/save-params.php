@@ -146,6 +146,12 @@ namespace {
     check(strpos($GLOBALS['save_query'][0], 'UPDATE redcap_metadata_temp ') === 0, 'Wrong draft metadata table');
     $checks++;
 
+    foreach (['bgColor' => [], 'noiseColor' => 7, 'textColor' => '256,1,2'] as $option => $invalidColor) {
+        $response = save('@NEDCAPTCHA', ['type' => 'image', $option => $invalidColor]);
+        check($response['warnings'] && $GLOBALS['save_query'] === null, 'Invalid color was saved');
+        $checks++;
+    }
+
     // A stale cached tag must not lead to a successful write after the actual tag was removed.
     $cachedAnnotation = '@NEDCAPTCHA';
     Project::$annotation = $cachedAnnotation;

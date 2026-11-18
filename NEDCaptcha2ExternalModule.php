@@ -888,8 +888,13 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$this->warnings[] = "Invalid 'angleVariation' parameter, defaulting to 'medium'.";
 			$full["angleVariation"] = "medium";
 		}
-		// bgColor
-		$full["bgColor"] = Color::Parse($params["bgColor"] ?? "#f3f3f3");
+		foreach (['bgColor' => '#f3f3f3', 'textColor' => '#800000', 'noiseColor' => '#333333'] as $key => $default) {
+			$full[$key] = Color::tryParse(array_key_exists($key, $params) ? $params[$key] : $default);
+			if ($full[$key] === null) {
+				$this->warnings[] = "Invalid '$key' color. Using $default.";
+				$full[$key] = Color::Parse($default);
+			}
+		}
 		// capture (boolean, default false)
 		$full["capture"] = isset($params["capture"]) ? $params["capture"] === true : false;
 		// caseInsensitive (boolean, default false)
@@ -909,18 +914,13 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 		$custom = isset($params["custom"]) ? $params["custom"] : [];
 		$full["custom"] = [];
-		$pos = 1;
-		foreach ($custom as $pair) {
-			if (!isset($pair["challenge"]) || !isset($pair["response"])) {
-				$this->warnings[] = "Invalid entry in 'custom' parameter (position {$pos})";
-				$pos++;
+		foreach (array_values($custom) as $index => $pair) {
+			if (!is_string($pair['challenge'] ?? null) || trim($pair['challenge']) === ''
+				|| !is_string($pair['response'] ?? null) || trim($pair['response']) === '') {
+				$this->warnings[] = "Invalid custom challenge or response on line " . ($index + 1) . ".";
+				continue;
 			}
-			else {
-				$full["custom"][] = [
-					"challenge" => $pair["challenge"],
-					"response" => $pair["response"]
-				];
-			}
+			$full['custom'][] = ['challenge' => $pair['challenge'], 'response' => $pair['response']];
 		}
 		// length (3-10, default 6)
 		$full["length"] = min(self::IMAGE_MAX_LENGTH, max(intval($params["length"] ?? self::IMAGE_DEFAULT_LENGTH), self::IMAGE_MIN_LENGTH));
@@ -933,8 +933,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$full["minValue"] = 1;
 			$full["maxValue"] = 10;
 		}
-		// noiseColor
-		$full["noiseColor"] = Color::Parse($params["noiseColor"] ?? "#333333");
 		// noiseDensity (off/low/medium/high, default medium)
 		$full["noiseDensity"] = $params["noiseDensity"] ?? "medium";
 		if (!in_array($full["noiseDensity"], ["off", "low", "medium", "high"], true)) {
@@ -949,8 +947,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$this->warnings[] = "Invalid 'sizeVariation' parameter, defaulting to 'medium'.";
 			$full["sizeVariation"] = "medium";
 		}
-		// textColor
-		$full["textColor"] = Color::Parse($params["textColor"] ?? "#800000");
 		// type (none/math/image/custom, default math)
 		if (!isset($params["type"]) || !in_array($params["type"], ["none", "math", "image", "custom"], true)) {
 			$params["type"] = "math";
