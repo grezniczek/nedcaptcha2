@@ -4,7 +4,7 @@
 define('PROJECT_ID', 355);
 function db_escape($value) { return addslashes($value); }
 function db_query($sql) {
-    if (stripos($sql, 'SELECT s.project_id') !== false) return ['project_id' => 355, 'form_name' => 'form_1', 'survey_id' => 1];
+    if (stripos($sql, 'SELECT s.project_id') !== false) return surveyContext($_GET['s']);
     if (stripos($sql, 'select participant_id') !== false) return ['participant_id' => 10];
     if (stripos($sql, 'select response_id') !== false) return ['response_id' => 20];
     if (stripos($sql, 'select m.field_name') !== false) return ['field_name' => $GLOBALS['lastSavedField']];
@@ -59,6 +59,25 @@ $proof = [Module::CLIENT_KEY => Crypto::getGuid()];
 $responseHash = getenv('REDCAP_SURVEY_CLASS') ? Survey::encryptResponseHash(20, 10) : 'valid-response';
 $continuation = ['__response_hash__' => $responseHash];
 $key = Module::STORE_KEY . 'public-hash_' . Crypto::getGuid();
+
+// A second arm has its own public hash, even though the framework's project
+// helper returns the first arm. Exercise rendering and capture at that event.
+$_SESSION = [];
+$arm = ['s' => 'second-arm'];
+$module = request($custom, [], $arm);
+ob_start();
+$module->redcap_survey_page(355, null, 'form_1', 2, null, 'second-arm', null);
+check(strpos(ob_get_clean(), Module::CLIENT_KEY) !== false, 'Second arm did not render the challenge controls');
+request($custom, $proof + ['captcha' => 'answer'], $arm);
+$otherArm = request($custom, $proof + ['submit-action' => 'submit-btn-saverecord']);
+check(property($otherArm, 'active') && $_POST === [], 'A different arm accepted the second arm’s proof');
+$module = request($custom, $proof + ['submit-action' => 'submit-btn-saverecord'], $arm);
+$module->redcap_save_record(355, 'arm-record', 'form_1', 2, null, 'second-arm', 21, 1);
+check(REDCap::$data['arm-record'][2]['captcha'] === 'answer', 'Capture missing on second arm');
+foreach (['private-hash', 'later-event'] as $hash) {
+    $module = request($custom, [], ['s' => $hash]);
+    check(!property($module, 'active'), 'Non-public link challenged');
+}
 
 function surveyRequest($post = [], $get = [], $params = null, $extra = []) {
     return request($params ?? $GLOBALS['custom'], $post, $get, $extra + ['second' => '', 'form_1_complete' => '']);

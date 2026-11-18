@@ -37,6 +37,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	private $warnings = [];
 	private $active = false;
 	private $suppress_calculation_emitter = false;
+	private $public_survey_hash = null;
 	private $accepted_submission_key = null;
 	private $pending_capture = null;
 	private $reupload_recovery = false;
@@ -48,19 +49,29 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		// Only operate on a fresh public survey page
 		$page = defined("PAGE") ? PAGE : "";
 		if ($page != "surveys/index.php") return;
-		$psh = $this->framework->getPublicSurveyHash($project_id);
 		$sh = $_GET["s"] ?? "";
 
 		// Real passthru endpoints terminate in REDCap's dispatcher; an empty flag does not.
 		if ($sh == "") return;
 		if (!empty($_GET["__passthru"])) return;
 
+		/** @var \Project */
+		$Proj = $GLOBALS["Proj"];
+		// Obtain survey info
+		$context = \Survey::getSurveyContextFromSurveyHash($sh);
+		// Check if this is a valid instrument
+		if (!array_key_exists($context["form_name"] ?? "__", $Proj->forms)) return;
+		// Use the same first-form/first-event test as REDCap's survey controller.
+		$is_public = $context['participant_email'] === null && $context['form_name'] === $Proj->firstForm
+			&& $Proj->isFirstEventIdInArm($context['event_id']);
+		$this->public_survey_hash = $is_public ? $sh : null;
+
 		// Load previous state (if any)
 		$client_key = $_POST[self::CLIENT_KEY] ?? null;
 		if (!is_string($client_key) || !preg_match('/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $client_key)) {
 			$client_key = \Crypto::getGuid();
 		}
-		$store_key = self::STORE_KEY."{$psh}_{$client_key}";
+		$store_key = self::STORE_KEY."{$sh}_{$client_key}";
 		$cutoff = time() - self::CAPTCHA_EXPIRATION * 60;
 		foreach ($_SESSION[self::CHALLENGE_SESSION_KEY] ?? [] as $key => $issued_at) {
 			if ($issued_at < $cutoff) unset($_SESSION[self::CHALLENGE_SESSION_KEY][$key]);
@@ -73,7 +84,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if (!$owned) {
 			$previous_store_key = $store_key;
 			$client_key = \Crypto::getGuid();
-			$store_key = self::STORE_KEY."{$psh}_{$client_key}";
+			$store_key = self::STORE_KEY."{$sh}_{$client_key}";
 			// A pending submission in this browser's session survives proof rotation.
 			if (isset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$previous_store_key])) {
 				$submission = $_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$previous_store_key];
@@ -86,12 +97,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$stored = $result->fetch_assoc() ?? $stored;
 		}
 
-		/** @var \Project */
-		$Proj = $GLOBALS["Proj"];
-		// Obtain survey info
-		$context = \Survey::getSurveyContextFromSurveyHash($sh);
-		// Check if this is a valid instrument
-		if (!array_key_exists($context["form_name"] ?? "__", $Proj->forms)) return;
 		// Prepare context
 		$instrument = $context["instrument"] = $context["form_name"]; // Rename and augment for use in ActionTagHelper
 		$context["record"] = null;
@@ -105,7 +110,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$response_hash = $_GET['__rh'] ?? null;
 		}
 		$existing_response = false;
-		if ($sh == $psh && is_string($response_hash) && $response_hash !== '') {
+		if ($is_public && is_string($response_hash) && $response_hash !== '') {
 			$participant_id = \Survey::getParticipantIdFromHash($sh);
 			$response_id = $participant_id ? \Survey::decryptResponseHash($response_hash, $participant_id) : null;
 			$existing_response = is_numeric($response_id) && $response_id > 0;
@@ -132,10 +137,10 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			array_keys($tagged[self::AT_CUSTOMCHALLENGE] ?? [""])[0],
 			// AT_CUSTOMEMBED will be considered later
 		], function($v) { return !empty($v); });
-		$session_passed = $psh == $sh && isset($tagged[self::AT_SETUP]) && $this->validateSolvedSession($project_id, $psh);
+		$session_passed = $is_public && isset($tagged[self::AT_SETUP]) && $this->validateSolvedSession($project_id, $sh);
 
-		if ($returning || $existing_response || $stored["passed"] || $session_passed || $psh != $sh || !isset($tagged[self::AT_SETUP])) {
-			if ($owned && $stored['passed'] && $psh === $sh && !$returning && !$existing_response && isset($tagged[self::AT_SETUP])) {
+		if ($returning || $existing_response || $stored["passed"] || $session_passed || !$is_public || !isset($tagged[self::AT_SETUP])) {
+			if ($owned && $stored['passed'] && $is_public && !$returning && !$existing_response && isset($tagged[self::AT_SETUP])) {
 				$this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged, $client_key);
 				$this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			}
@@ -224,7 +229,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 		if ($passed) {
 			// CAPTCHA was solved
-			$this->createSolvedSession($project_id, $psh);
+			$this->createSolvedSession($project_id, $sh);
 			$resumed = $this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged, $client_key);
 			if ($resumed) $this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
@@ -385,7 +390,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	}
 
 	function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance) {
-		if ($this->accepted_submission_key === null || $survey_hash !== $this->framework->getPublicSurveyHash($project_id)) return;
+		if ($this->accepted_submission_key === null || $survey_hash !== $this->public_survey_hash) return;
 		if ($this->pending_capture !== null) {
 			list($project, $field, $response) = $this->pending_capture;
 			$data = [$record => [$event_id => [$field => $response]]];
@@ -426,7 +431,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
 
 		// Check if this is a fresh (i.e., not associated with any record) public survey
-		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
+		$is_fresh_public = $record == null && $survey_hash !== null && $survey_hash === $this->public_survey_hash;
 		// Skip the CAPTCHA if a record is already defined or it is set to inactive.
 		if (!$is_fresh_public) return;
 
@@ -462,13 +467,13 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance = 1)  {
 		// Native prefill can have a tentative record ID without saving a response.
-		if ($this->reupload_recovery && $survey_hash === $this->framework->getPublicSurveyHash($project_id)) {
+		if ($this->reupload_recovery && $survey_hash === $this->public_survey_hash) {
 			print \RCView::script(join("\n", $this->scripts_regular), true);
 			return;
 		}
 
 		// Check if this is a fresh (i.e., not associated with any record) public survey
-		$is_fresh_public = $record == null && $survey_hash == $this->getPublicSurveyHash($project_id);
+		$is_fresh_public = $record == null && $survey_hash !== null && $survey_hash === $this->public_survey_hash;
 		// Skip the CAPTCHA if a record is already defined or it is set to inactive.
 		if (!$is_fresh_public || !$this->active) return;
 

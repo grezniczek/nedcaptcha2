@@ -21,6 +21,8 @@ When the module is enabled in a project and an instrument's first public survey 
 - a custom challenge-response list, or
 - a disabled `none` mode that leaves the tagged fields out of normal survey operation without presenting a challenge.
 
+In longitudinal projects, the CAPTCHA applies to the public link for each eligible arm. Each link has its own challenge proof. Individual participant links remain under REDCap’s control.
+
 The module stores transient CAPTCHA state in the External Modules log and binds each challenge to the browser's REDCap survey session. Challenge proof expires 120 minutes after issuance; an hourly cron removes expired log entries. CAPTCHA responses are not saved to the project data unless the **Capture response** option is enabled.
 
 ![Screenshot](images/nedcaptcha.png)

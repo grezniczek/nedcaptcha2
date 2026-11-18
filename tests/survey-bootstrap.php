@@ -20,6 +20,12 @@ namespace Vanderbilt\REDCap\Classes\FileFields {
 namespace {
     define('PAGE', 'surveys/index.php');
 
+    function surveyContext($hash) {
+        return ['project_id' => 355, 'form_name' => 'form_1', 'survey_id' => 1,
+            'event_id' => $hash === 'second-arm' ? 2 : ($hash === 'later-event' ? 3 : 1),
+            'participant_email' => $hash === 'private-hash' ? 'participant' : null];
+    }
+
     class SurveyFramework {
         public $settings = [];
         public static $logs = [];
@@ -46,6 +52,8 @@ namespace {
         public $metadata = [];
         public $forms;
         public $surveys;
+        public $firstForm = 'form_1';
+        public function isFirstEventIdInArm($event) { return in_array($event, [1, 2], true); }
         public $table_pk = 'record_id';
         public function __construct($projectId) {
             if (isset(self::$project_cache[$projectId])) {
@@ -66,7 +74,7 @@ namespace {
         require_once getenv('REDCAP_SURVEY_CLASS');
     } else {
         class Survey {
-            public static function getSurveyContextFromSurveyHash($hash) { return ['form_name' => 'form_1', 'survey_id' => 1]; }
+            public static function getSurveyContextFromSurveyHash($hash) { return surveyContext($hash); }
             public static function getParticipantIdFromHash($hash) { return $hash === 'public-hash' ? 10 : 11; }
             public static function getPageFields($instrument, $bySection) {
                 $pages = [];
