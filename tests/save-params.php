@@ -194,7 +194,7 @@ namespace {
 
     // The editor offers math defaults and warnings for invalid stored parameters,
     // without changing metadata until a valid configuration is explicitly saved.
-    foreach (['garbage', 'null', '"none"', '{"type":true}'] as $invalid) {
+    foreach (['garbage', 'null', '"none"', '{"type":true}', '{"type":', '{"type":"math",}', '', '{"custom":["@HIDDEN-FORM",'] as $invalid) {
         Project::$annotation = '@HIDDEN-FORM @NEDCAPTCHA=' . $invalid . ' @HIDDEN-PDF';
         ActionTagHelper::$cache = [];
         $GLOBALS['save_query'] = null;
@@ -208,8 +208,16 @@ namespace {
         check($response['warnings'] !== [] && $response['errors'] === [], 'Recoverable configuration error must produce a warning');
         check($GLOBALS['save_query'] === null, 'Reading invalid parameters changed metadata');
         check(save(Project::$annotation, ['type' => 'math']) === ['errors' => [], 'warnings' => []], 'Invalid configuration could not be repaired');
-        check(strpos($GLOBALS['save_query'][1][0], '@HIDDEN-FORM @NEDCAPTCHA=') === 0
-            && substr($GLOBALS['save_query'][1][0], -strlen(' @HIDDEN-PDF')) === ' @HIDDEN-PDF', 'Repair changed surrounding action tags');
+        $expected = '@HIDDEN-FORM @NEDCAPTCHA=' . json_encode(['type' => 'math'], JSON_PRETTY_PRINT) . ' @HIDDEN-PDF';
+        check($GLOBALS['save_query'][1][0] === $expected, 'Repair left old parameters or changed neighboring annotations');
+        $checks++;
+    }
+    foreach (['{"challenge":"unfinished @HIDDEN', '{"type": unfinished field note'] as $ambiguous) {
+        $annotation = '@NEDCAPTCHA=' . $ambiguous;
+        $result = save($annotation, ['type' => 'math']);
+        check($result['errors'] && $GLOBALS['save_query'] === null, 'Editor overwrote ambiguous annotation text');
+        $result = $module->redcap_module_ajax('get-params', ['field' => 'nc2_resp'], 355, ...array_fill(0, 11, null));
+        check(!empty($result['errors']) && !isset($result['html']), 'Ambiguous annotation opened an editable dialog');
         $checks++;
     }
     foreach (['garbage', ['type' => true], ['type' => 1]] as $invalid) {

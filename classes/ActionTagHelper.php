@@ -73,7 +73,7 @@ class ActionTagHelper
 
                 // Merge action_tag into action_tags
                 $action_tags[$action_tag][$field_name][] = 
-                    isset($tag['params']) ? $tag['params'] : "";
+                    $tag['params'];
             }
         }
 
@@ -119,7 +119,7 @@ class ActionTagHelper
         $re = "/(?(DEFINE)
           (?<number>    -?  (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)? )
           (?<boolean>   true | false | null )
-          (?<string>    \" ([^\"\\\\]* | \\\\ [\"\\\\bfnrt\/] | \\\\ u [0-9a-fA-F]{4} )* \" )
+          (?<string>    \" ([^\"\\\\]++ | \\\\ [\"\\\\bfnrt\/] | \\\\ u [0-9a-fA-F]{4} )* \" )
           (?<array>     \[  (?:  (?&json)  (?: , (?&json)  )*  )?  \s* \] )
           (?<pair>      \s* (?&string) \s* : (?&json)  )
           (?<object>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )?  \s* \} )
@@ -149,15 +149,29 @@ class ActionTagHelper
 
         $results = array();
 
-        foreach ($matches['actiontag'] as $i => $tag) {
-            $tag = $tag[0];
+        $consumed = 0;
+        foreach ($matches['actiontag'] as $i => [$tag, $offset]) {
+            if ($offset < $consumed) continue;
+            $match = $matches[0][$i][0];
+            $params = $matches['params'][$i][0];
+            $end = $offset + strlen($match);
+            if ($tag === NEDCaptcha2ExternalModule::AT_SETUP && ($string[$end] ?? '') === '=') {
+                // The JSON matcher stopped before an assignment. Recover only complete
+                // JSON tokens ending before the next tag or the end of the annotation.
+                // Free text or an unterminated quote makes the replacement span ambiguous.
+                $tokens = '~\G=(?:\s++|[{}\[\],:]|"(?:[^"\\\\]++|\\\\.)*+"|true|false|null|[-+.0-9eE]++)*+(?=@[A-Za-z0-9_-]|\z)~s';
+                if (preg_match($tokens, $string, $tail, 0, $end)) {
+                    $suffix = rtrim($tail[0]);
+                    $match .= $suffix;
+                    $params = substr($match, strlen($tag) + 1);
+                    if ($params === '') $params = '='; // Empty assignment is invalid, unlike a bare tag.
+                } else {
+                    $params = null; // Survey uses math; editor must not guess where to stop replacing.
+                }
+            }
+            $consumed = $offset + strlen($match);
             if ($tag_only && $tag !== $tag_only) continue;
-            $results[] = array(
-                'actiontag' => $tag,
-                'params' => $matches['params'][$i][0],
-                'match' => $matches[0][$i][0],
-                'offset' => $matches[0][$i][1],
-            );
+            $results[] = ['actiontag' => $tag, 'params' => $params, 'match' => $match, 'offset' => $offset];
         }
         return $results;
     }

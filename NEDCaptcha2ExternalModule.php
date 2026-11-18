@@ -11,6 +11,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	const SESSION_COOKIE_PREFIX = "__nedcaptcha2session__";
 	const SESSION_STORE_KEY = "__nedcaptcha2session__";
 
+	const ANNOTATION_REPAIR_ERROR = 'The end of the @NEDCAPTCHA configuration is unclear. Correct the field annotation in the Online Designer, then reopen the CAPTCHA editor.';
 	const AT_SETUP = "@NEDCAPTCHA";
 	const AT_INSTRUCTIONS = "@NEDCAPTCHA-INSTRUCTIONS";
 	const AT_FAILMESSAGE = "@NEDCAPTCHA-FAILMESSAGE";
@@ -514,6 +515,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], $field, null, null, true)[self::AT_SETUP] ?? [];
 
 			if (count($tagged) == 0) return "ERROR";
+			if ($tagged[$field][0] === null) return ["errors" => [self::ANNOTATION_REPAIR_ERROR], "warnings" => []];
 
 			$params = $this->validate_params($tagged[$field][0], false);
 			unset($params["debug"]);
@@ -608,6 +610,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 				];
 			}
 			$setup_tag = $setup_tags[0];
+			if ($setup_tag['params'] === null) return ["errors" => [self::ANNOTATION_REPAIR_ERROR], "warnings" => []];
 			$replacement = self::AT_SETUP."=".json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 			$misc_new = substr_replace($misc_current, $replacement, $setup_tag["offset"], strlen($setup_tag["match"]));
 			// Store
