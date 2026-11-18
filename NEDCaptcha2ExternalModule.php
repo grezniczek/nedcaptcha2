@@ -495,8 +495,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$page = defined("PAGE") ? PAGE : "";
 		
 		if ($page == "Design/online_designer.php" && isset($_GET["page"])) {
-			$instrument = $_GET["page"];
-			$this->inject_online_designer($project_id, $instrument);
+			$this->inject_online_designer($project_id);
 		}
 	}
 
@@ -1102,13 +1101,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			(($_SERVER["HTTP_X_FORWARDED_PROTO"] ?? "") === "https");
 	}
 
-	private function inject_online_designer($project_id, $instrument) {
+	private function inject_online_designer($project_id) {
 		if ($this->getConfigurationEditError($project_id, new \Project($project_id)) !== null) return;
-		// Check for action tags
-		$tagged = ActionTagHelper::getActionTags($project_id, [self::AT_SETUP], null, [$instrument], null, true)[self::AT_SETUP] ?? [];
-
-		if (count($tagged) == 0) return;
-
 		$ih = InjectionHelper::init($this);
 		$ih->css("css/nedCAPTCHA2.css");
 		$ih->js("js/nedCAPTCHA2.js");
@@ -1117,8 +1111,6 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$config = [
 			"debug" => $this->getProjectSetting("debug") == true,
 			"version" => $this->VERSION,
-			"tagged" => array_keys($tagged),
-			"at" => self::AT_SETUP,
 			"linkTitle" => "Edit CAPTCHA settings",
 			"updateLabel" => "Update"
 		];

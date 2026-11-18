@@ -9,10 +9,10 @@ const jquery = require('jquery');
 const source = fs.readFileSync(path.join(__dirname, '../js/nedCAPTCHA2.js'), 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-async function fixture(t) {
-    const annotations = ['@NEDCAPTCHA', '@nedCAPTCHA', '@nedcaptcha', '@NEDCAPTCHA-INSTRUCTIONS', '@NEDCAPTCHA_EXTRA', '@NEDCAPTCHAX'];
+async function fixture(t, initialTags) {
+    const annotations = initialTags ?? ['@NEDCAPTCHA', '@nedCAPTCHA', '@nedcaptcha', '@NEDCAPTCHA-INSTRUCTIONS', '@NEDCAPTCHA_EXTRA', '@NEDCAPTCHAX'];
     const rows = annotations.map((tag, i) => `<tr id="field${i}-tr"><td class="actiontags"><code>${tag}</code></td></tr>`).join('');
-    const dom = new JSDOM(`<body><table>${rows}</table></body>`, { runScripts: 'outside-only' });
+    const dom = new JSDOM(`<body><div id="draggablecontainer_parent"><table>${rows}</table></div></body>`, { runScripts: 'outside-only' });
     t.after(() => dom.window.close());
     const { window } = dom;
     const $ = jquery(window);
@@ -72,7 +72,7 @@ async function fixture(t) {
     };
     window.eval(source);
     const em = window.DE_RUB_SEG_nedCAPTCHA2;
-    em.init({ tagged: annotations.map((_, i) => `field${i}`), at: '@NEDCAPTCHA', linkTitle: 'Edit', updateLabel: 'Update' }, jsmo);
+    em.init({ linkTitle: 'Edit', updateLabel: 'Update' }, jsmo);
     await new Promise(resolve => $(resolve));
     await tick();
     const editor = () => $('#nedCAPTCHA-OD-editor');
@@ -89,6 +89,23 @@ test('only the exact uppercase setup tag receives an editor link', async t => {
     const { $ } = await fixture(t);
     assert.equal($('#field0-tr a.nedCAPTCHA-OD-link').length, 1);
     assert.equal($('a.nedCAPTCHA-OD-link').length, 1);
+});
+
+test('first setup tag on an untagged instrument opens immediately after an AJAX row update', async t => {
+    const f = await fixture(t, ['@HIDDEN']);
+    assert.equal(f.$('.nedCAPTCHA-OD-link').length, 0);
+    f.$('#field0-tr code').text('@HIDDEN @NEDCAPTCHA');
+    await tick();
+    f.$('#field0-tr a').trigger('click');
+    await tick();
+    assert.equal(f.state.requests[0].payload.field, 'field0');
+    f.cancel();
+    f.$('#field0-tr').replaceWith('<tr id="added-tr"><td class="actiontags"><code>@NEDCAPTCHA</code></td></tr>');
+    await tick();
+    assert.equal(f.$('#added-tr a').length, 1);
+    f.$('#added-tr a').trigger('click');
+    await tick();
+    assert.equal(f.state.requests[1].payload.field, 'added');
 });
 
 test('JSON pair edits are validated and sent as structured text pairs', async t => {

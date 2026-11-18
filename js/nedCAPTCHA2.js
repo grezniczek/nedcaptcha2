@@ -17,8 +17,6 @@ let config = {};
 
 let editing = false;
 
-const hooks = {};
-
 //#endregion
 
 /**
@@ -41,36 +39,41 @@ function initialize(config_data, jsmo = null) {
  * that will open the settings editor 
  */
 function initOnlineDesigner() {
-	// Setup links
-	for (const field of config.tagged) {
-		addLink(field);
-	}
-	// Create dialog container
-	const $dialog = $('<div id="nedCAPTCHA-OD-editor" style="display: none;"></div>');
-	$dialog.appendTo('body');
-	// Hook into the Online Designer
-	hooks.setSurveyQuestionNumbers = window['setSurveyQuestionNumbers'];
-	window['setSurveyQuestionNumbers'] = function(fieldName) {
-		hooks.setSurveyQuestionNumbers(fieldName);
-		addLink(fieldName);
-	}
+	const fields = document.getElementById('draggablecontainer_parent') || document.getElementById('draggable');
+	if (!fields || document.getElementById('nedCAPTCHA-OD-editor')) return;
+	$('<div id="nedCAPTCHA-OD-editor" style="display: none;"></div>').appendTo('body');
+
+	const selector = '.actiontags code';
+	fields.querySelectorAll(selector).forEach(addLink);
+	// The Designer adds and replaces field rows without reloading the instrument.
+	new MutationObserver(changes => {
+		for (const change of changes) {
+			for (const node of change.addedNodes) {
+				if (node.nodeType === Node.TEXT_NODE && node.parentElement?.matches(selector)) {
+					addLink(node.parentElement);
+				} else if (node.nodeType === Node.ELEMENT_NODE) {
+					if (node.matches(selector)) addLink(node);
+					node.querySelectorAll(selector).forEach(addLink);
+				}
+			}
+		}
+	}).observe(fields, { childList: true, subtree: true });
 }
 
-function addLink(fieldName) {
-	if (!fieldName) return;
-	const $ats = $('tr#' + fieldName + '-tr .actiontags code');
-	if ($ats.find('a.nedCAPTCHA-OD-link').length) return;
-	log('Adding/Updating link for', fieldName);
-	$ats.each(function() {
-		const orig = $(this).html();
-		const regex = new RegExp(
-			config.at.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_-])'
-		);
-		$(this).html(orig.replace(regex, '<a class="nedCAPTCHA-OD-link" data-bs-toggle="tooltip" title="'+config.linkTitle+'" href="javascript:' + NS_PREFIX + EM_NAME + '.edit(\'' + fieldName + '\');">' + config.at.replace('@', '<span class="nedCAPTCHA-OD-accent">@</span>') + '</a>'));
-		$(this).find('a.nedCAPTCHA-OD-link').each(function() {
-			new bootstrap.Tooltip(this, { trigger: 'hover' });
-		});
-	});
+function addLink(code) {
+	const row = code.closest('tr[id$="-tr"]');
+	if (!row || code.querySelector('a.nedCAPTCHA-OD-link')) return;
+	const match = /@NEDCAPTCHA(?![A-Za-z0-9_-])/.exec(code.textContent);
+	if (!match) return;
+	const text = code.textContent;
+	const link = $('<a>', { class: 'nedCAPTCHA-OD-link', href: '#', title: config.linkTitle })
+		.append($('<span class="nedCAPTCHA-OD-accent">@</span>'), match[0].slice(1))
+		.on('click', event => {
+			event.preventDefault();
+			edit(row.id.slice(0, -3));
+		})[0];
+	code.replaceChildren(text.slice(0, match.index), link, text.slice(match.index + match[0].length));
+	new bootstrap.Tooltip(link, { trigger: 'hover' });
 }
 
 function edit(field) {

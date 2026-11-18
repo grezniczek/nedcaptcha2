@@ -4,6 +4,8 @@
 namespace ExternalModules {
     class AbstractExternalModule {
         public $framework;
+        public $VERSION = '9.9.9';
+        public function getModulePath() { return dirname(__DIR__) . '/'; }
         public function __construct() { $this->framework = new \EditorFramework(); }
         public function getProjectSetting($key) { return false; }
     }
@@ -14,7 +16,13 @@ namespace {
         public static $events = [];
         public static function logEvent(...$arguments) { self::$events[] = $arguments; }
     }
+    class RCView {
+        public static function script($script) { return '<script>' . $script . '</script>'; }
+    }
     class EditorFramework {
+        public function getUrl($path) { return $path; }
+        public function initializeJavascriptModuleObject() {}
+        public function getJavascriptModuleObjectName() { return 'editorModule'; }
         public static $authenticated = true;
         public static $design = true;
         public function isAuthenticated() { return self::$authenticated; }
@@ -318,6 +326,18 @@ namespace {
     $GLOBALS['save_query_succeeds'] = true;
     check(count(REDCap::$events) === $eventCount, 'Failed/unchanged save should not log an update');
     $checks++;
+
+    define('PAGE', 'Design/online_designer.php');
+    $_GET['page'] = 'form_1';
+    Project::$annotation = 'No action tags';
+    foreach ([true, false] as $mayEdit) {
+        EditorFramework::$design = $mayEdit;
+        ob_start();
+        $module->redcap_every_page_top(355);
+        $html = ob_get_clean();
+        check((strpos($html, 'nedCAPTCHA2.init(') !== false) === $mayEdit, 'Editor bootstrap on untagged instrument ignored design access');
+        $checks++;
+    }
 
     echo "Passed $checks editor/save-handler regression cases (in-memory metadata/database).\n";
 }

@@ -4,7 +4,7 @@
 
 nedCAPTCHA 2 adds CAPTCHA protection to REDCap public surveys without depending on an external CAPTCHA provider. The name stands for **n**o **e**xternal **d**ependencies.
 
-Release metadata is prepared for **1.1.4**, with a planned release date of **2026-11-17**. See the [release validation results](#114-release-readiness).
+Release metadata was prepared for **1.1.4** with an initial target of **2026-11-17**. The [browser validation results](#114-release-readiness) describe that build. Later changes and their [automated checks](#checks-added-after-the-november-17-browser-run) are listed separately.
 
 This is a new version of [nedCAPTCHA](https://github.com/grezniczek/redcap_nedcaptcha). It uses action-tagged fields on the first survey page instead of a fixed module-level CAPTCHA page, which allows more project-specific layout, field embedding, and compatibility with REDCap Multi-Language Management.
 
@@ -73,6 +73,7 @@ If loading settings fails because design rights or editable draft mode have chan
 
 1. Put a Text Box field with no validation on the first page of the public survey instrument. If all questions are displayed on one page, the field can be in any section. If each section is displayed on a separate page, the field must be in the first section.
 2. Add `@NEDCAPTCHA` to that field.
+   The editor link appears as soon as the Online Designer updates the field row, including the first tagged field on an instrument.
 3. Use the field label as the prompt shown above the challenge.
 4. Click the action tag in the Online Designer to configure the CAPTCHA type and options.
 5. Consider adding `@HIDDEN-FORM` and `@HIDDEN-PDF` to fields used only for the CAPTCHA page, especially when the response is not captured.
@@ -234,6 +235,10 @@ For example:
 - Solved CAPTCHA sessions are disabled by default. When disabled, opening the same public survey in a new tab requires solving the CAPTCHA again.
 - When solved CAPTCHA sessions are enabled, the solved state is stored as an opaque browser cookie backed by server-side session metadata. It applies only to the same browser and the same project public survey.
 
+### Checks added after the November 17 browser run
+
+The automated suite also covers public survey links in multiple arms, Stop Action recovery with save and discard settings, malformed color and custom-pair configuration, editing structured pairs, repairing truncated annotations, and adding the first editor link without reloading. These cases are separate from the browser results below.
+
 ### 1.1.4 Release Readiness
 
 The issues identified in the code review on 2026-11-16 have been corrected and covered by automated checks on PHP 8.4.22, including pagination checks using the local REDCap survey class. Browser validation was performed on 2026-11-17 using the local REDCap 17.6.1 development installation, headless Chromium 159, and disposable project 562. The checks exercised REDCap's actual survey validation and persistence pipeline and verified saved answers in the database.
@@ -268,7 +273,8 @@ To exercise the pagination cases with a local REDCap installation's actual `Surv
 
 Version | Changes
 ------- | -----------
-1.1.4 (planned: 2026-11-17) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Displayed editor load errors and configuration warnings. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Made invalid parameters and CAPTCHA types fall back to math instead of disabling protection. Preserved first-page submissions across proof expiry or session loss, including Save & Return Later. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Fixed GD precision-loss deprecations so image rendering does not unnecessarily fall back to text math. Prevented silent attachment loss after survey-session loss by restoring the other answers and requesting re-upload before saving. Added automated regression checks and validated public-survey recovery, Save & Return, file uploads, and editor behavior through local REDCap browser tests.
+Since the November 17 validation build | Protected every eligible public survey arm, preserved Stop Actions across CAPTCHA recovery, handled invalid colors and blank custom answers, preserved structured challenge pairs during editing, repaired malformed assignments safely, and enabled the first editor link without a reload.
+1.1.4 (November 17 validation build) | Fixed saving settings for bare `@NEDCAPTCHA` tags and kept their default math behavior. Enforced case-sensitive module tags. Replaced shared editor toasts and preserved edits made during saves. Displayed editor load errors and configuration warnings. Escaped dynamic output, validated operand ranges, compared custom answers literally, decoded embedding keys, and made custom helper fields optional. Added design-rights and editable-draft checks plus redacted configuration audit events. Added text-math rendering fallback and browser-bound submission proof. Matched CAPTCHA discovery to the survey's pagination setting. Made invalid parameters and CAPTCHA types fall back to math instead of disabling protection. Preserved first-page submissions across proof expiry or session loss, including Save & Return Later. Kept page numbering consistent across submissions and Save & Return while saving captured responses separately. Fixed GD precision-loss deprecations so image rendering does not unnecessarily fall back to text math. Prevented silent attachment loss after survey-session loss by restoring the other answers and requesting re-upload before saving. Added automated regression checks and validated public-survey recovery, Save & Return, file uploads, and editor behavior through local REDCap browser tests.
 1.1.3   | Prevented REDCap calculation JavaScript from running against fields removed from the CAPTCHA-only survey page while retaining branching logic for custom challenges.
 1.1.2   | Removed "Test" link (development artifact).
 1.1.1   | Minor code refactor.
