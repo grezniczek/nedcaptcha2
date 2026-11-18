@@ -46,6 +46,8 @@ namespace {
         public static $saveAndReturn = false;
         public static $questionBySection = true;
         public static $headers = [];
+        public static $stopActions = [];
+        public static $discardOnStop = false;
         public static $fieldTypes = [];
         public static $repeating = '';
         public static $project_cache = [];
@@ -61,10 +63,10 @@ namespace {
                 return;
             }
             foreach (self::$annotations as $field => $annotation) {
-                $this->metadata[$field] = ['misc' => $annotation, 'element_label' => 'Label', 'form_name' => 'form_1', 'element_preceding_header' => self::$headers[$field] ?? '', 'element_type' => self::$fieldTypes[$field] ?? 'text'];
+                $this->metadata[$field] = ['misc' => $annotation, 'element_label' => 'Label', 'form_name' => 'form_1', 'stop_actions' => self::$stopActions[$field] ?? '', 'element_preceding_header' => self::$headers[$field] ?? '', 'element_type' => self::$fieldTypes[$field] ?? 'text'];
             }
             $this->forms = ['form_1' => ['survey_id' => 1, 'fields' => array_fill_keys(array_keys($this->metadata), true)]];
-            $this->surveys = [1 => ['save_and_return' => self::$saveAndReturn, 'question_by_section' => self::$questionBySection]];
+            $this->surveys = [1 => ['stop_action_delete_response' => self::$discardOnStop, 'save_and_return' => self::$saveAndReturn, 'question_by_section' => self::$questionBySection]];
         }
         public function isRepeatingFormOrEvent($event, $form) { return self::$repeating !== ''; }
         public function isRepeatingForm($event, $form) { return self::$repeating === 'form'; }

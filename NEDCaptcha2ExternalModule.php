@@ -195,18 +195,21 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		$passed = $stored["passed"] || $matches;
 		// Hold only a signed first-page survey submission, never the CAPTCHA POST
 		// itself. Keep answers out of the persistent module log and the CAPTCHA HTML.
-		if (!isset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key]) && $this->isRecoverableSubmission($_POST, $save_and_return)) {
-			$_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] = [
-				'created_at' => time(),
-				'post' => $this->filterPendingSubmission($_POST, $Proj, $instrument, $tagged),
-			];
+		$stop_requested = isset($_GET['__stopaction'], $_GET['__endsurvey'])
+			&& in_array($_POST['submit-action'] ?? null, ['submit-action', 'submit-btn-saverecord'], true);
+		$pending = $_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] ?? [];
+		if (!isset($pending['post']) && $this->isRecoverableSubmission($_POST, $save_and_return, $stop_requested)) {
+			$post = $this->filterPendingSubmission($_POST, $Proj, $instrument, $tagged);
+			$continue_stop = !empty($pending['reupload_stop']) && $post['submit-action'] === 'submit-btn-saverecord';
+			$stop = ($stop_requested || $continue_stop) && $this->hasSelectedStopChoice($post, $Proj);
+			if (!$stop_requested || $stop) {
+				$_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] = ['created_at' => time(), 'post' => $post, 'stop' => $stop];
+			}
 		}
 		// An unsolved CAPTCHA POST must never reach REDCap's record-saving paths.
 		$_POST = [];
 		$_SERVER['REQUEST_METHOD'] = 'GET';
-		foreach (['__add_participant', '__participant_identifier', '__return', '__endpublicsurvey', '__rh', '__endsurvey', '__page__', '__prevpage', '__reqmsg', '__passthru', 'id'] as $flag) {
-			unset($_GET[$flag]);
-		}
+		$this->clearSurveyRoutingFlags();
 		$_SESSION[self::CHALLENGE_SESSION_KEY][$store_key] = $_SESSION[self::CHALLENGE_SESSION_KEY][$store_key] ?? time();
 
 		// Reset expected?
@@ -421,10 +424,14 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 				$this->pending_capture = null;
 			}
 		}
+		$this->consumeProof($this->accepted_submission_key);
+	}
+
+	private function consumeProof($store_key) {
 		// A completed first submission cannot be replayed to create another response.
-		$this->framework->removeLogs('message = ?', $this->accepted_submission_key);
-		unset($_SESSION[self::CHALLENGE_SESSION_KEY][$this->accepted_submission_key]);
-		unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$this->accepted_submission_key]);
+		$this->framework->removeLogs('message = ?', $store_key);
+		unset($_SESSION[self::CHALLENGE_SESSION_KEY][$store_key]);
+		unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key]);
 		$this->accepted_submission_key = null;
 	}
 
@@ -661,8 +668,29 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 
 	#region Private Methods
 
-	private function isRecoverableSubmission($post, $save_and_return) {
+	private function clearSurveyRoutingFlags() {
+		foreach (['__add_participant', '__participant_identifier', '__return', '__endpublicsurvey', '__rh', '__endsurvey', '__stopaction', '__page__', '__prevpage', '__reqmsg', '__passthru', 'id'] as $flag) {
+			unset($_GET[$flag]);
+		}
+	}
+
+	// Inspect only first-page answers retained by filterPendingSubmission.
+	private function hasSelectedStopChoice($answers, $project) {
+		foreach ($answers as $name => $value) {
+			$field = $name;
+			if (strpos($name, '__chk__') === 0) {
+				list($field, $code) = explode('_RC_', substr($name, 7), 2);
+				if ($value !== \DataEntry::replaceDotInCheckboxCodingReverse($code)) continue;
+			}
+			$codes = $project->metadata[$field]['stop_actions'] ?? '';
+			if ($codes !== '' && in_array($value, \DataEntry::parseStopActions($codes), true)) return true;
+		}
+		return false;
+	}
+
+	private function isRecoverableSubmission($post, $save_and_return, $stop_requested) {
 		$actions = ['submit-btn-saverecord'];
+		if ($stop_requested) $actions[] = 'submit-action';
 		if ($save_and_return) $actions[] = 'submit-btn-savereturnlater';
 		return $_SERVER['REQUEST_METHOD'] === 'POST'
 			&& in_array($post['submit-action'] ?? null, $actions, true)
@@ -718,18 +746,31 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	private function restorePendingSubmission($store_key, $project, $instrument, $tagged, $client_key) {
 		$submission = $_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] ?? null;
 		if ($submission === null) return false;
+		// After native file prefill the fresh POST owns the answers and upload ticket.
+		if (!empty($submission['reupload_stop'])) {
+			if ($this->isRecoverableSubmission($_POST, false, false)) {
+				$answers = $this->filterPendingSubmission($_POST, $project, $instrument, $tagged);
+				if ($this->hasSelectedStopChoice($answers, $project)) $_GET['__stopaction'] = $_GET['__endsurvey'] = 1;
+			}
+			return false;
+		}
 		// Recheck field eligibility in case the design changed during verification.
 		$_POST = $this->filterPendingSubmission($submission['post'], $project, $instrument, $tagged);
 		$_SERVER['REQUEST_METHOD'] = 'POST';
-		foreach (['__add_participant', '__participant_identifier', '__return', '__endpublicsurvey', '__rh', '__endsurvey', '__page__', '__prevpage', '__reqmsg', '__passthru', 'id'] as $flag) {
-			unset($_GET[$flag]);
-		}
-		if ($this->prefillForFileReupload($_POST, $project, $client_key)) {
+		$this->clearSurveyRoutingFlags();
+		$stop = !empty($submission['stop']) && $this->hasSelectedStopChoice($_POST, $project);
+		$discard = $stop && $this->discardsStoppedResponse($project);
+		if (!$discard && $this->prefillForFileReupload($_POST, $project, $client_key)) {
 			// The filled form now owns the values. Do not replay its old ticket or
 			// overwrite a new upload when the respondent explicitly submits again.
-			unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key]);
+			if ($stop) {
+				$_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key] = ['created_at' => $submission['created_at'], 'reupload_stop' => true];
+			} else {
+				unset($_SESSION[self::PENDING_SUBMISSION_SESSION_KEY][$store_key]);
+			}
 			return true;
 		}
+		if ($stop) $_GET['__stopaction'] = $_GET['__endsurvey'] = 1;
 		if ($_POST['submit-action'] === 'submit-btn-savereturnlater') $_GET['__return'] = 1;
 		return true;
 	}
@@ -772,8 +813,18 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		return true;
 	}
 
+	private function discardsStoppedResponse($project) {
+		$survey_id = $project->forms[$project->firstForm]['survey_id'];
+		return !empty($project->surveys[$survey_id]['stop_action_delete_response']);
+	}
+
 	private function acceptSubmission($store_key, $stored, $project, $tagged) {
 		if (!isset($_POST['submit-action'])) return;
+		// REDCap omits the save hook when a Stop Action discards a fresh response.
+		if (isset($_GET['__stopaction'], $_GET['__endsurvey']) && $this->discardsStoppedResponse($project)) {
+			$this->consumeProof($store_key);
+			return;
+		}
 		$this->accepted_submission_key = $store_key;
 		$capture_field = $stored['capture_field'] ?? null;
 		if ($capture_field !== null && isset($tagged[self::AT_SETUP][$capture_field], $stored['capture_response'])) {

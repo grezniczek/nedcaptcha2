@@ -14,6 +14,10 @@ function db_num_rows($result) { return count($result) ? 1 : 0; }
 function db_fetch_assoc($result) { return $result; }
 function db_result($result, $row) { return reset($result); }
 function pre_query($sql) { return "'survey-record'"; }
+class DataEntry {
+    public static function parseStopActions($codes) { return array_map('trim', explode(',', $codes)); }
+    public static function replaceDotInCheckboxCodingReverse($code) { return str_replace('|', '.', $code); }
+}
 class Econsent {
     public static function econsentEnabledForSurvey($survey) { return false; }
 }
@@ -417,6 +421,45 @@ check($_SESSION[$pendingKey][$otherKey]['post']['normal'] === 'other tab answer'
 $_SESSION[$pendingKey][$otherKey]['created_at'] = time() - 7201;
 surveyRequest();
 check(!isset($_SESSION[$pendingKey][$otherKey]), 'Expired pending answers were retained');
+
+// REDCap submits its hidden submit-action control when a Stop Action is confirmed.
+foreach ([false, true] as $discard) {
+    foreach (['radio', 'checkbox'] as $type) {
+        $_SESSION = SurveyFramework::$logs = [];
+        Project::$discardOnStop = $discard;
+        Project::$stopActions = ['normal' => '0, 2.5'];
+        Project::$fieldTypes = ['normal' => $type];
+        $answers = $type === 'radio' ? ['normal' => '0'] : ['__chk__normal_RC_2|5' => '2.5'];
+        $post = $answers + ['submit-action' => 'submit-action'] + $recoverablePost;
+        Crypto::$nextGuids = [$freshGuid];
+        surveyRequest($post, ['__stopaction' => 1, '__endsurvey' => 1]);
+        check($_POST === [] && !isset($_GET['__stopaction']) && !isset($_GET['__endsurvey']), 'Stop routing reached the challenge');
+        surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'wrong']);
+        check($_POST === [], 'Wrong answer resumed Stop Action');
+        $module = surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'answer']);
+        check(isset($_GET['__stopaction'], $_GET['__endsurvey']) && array_intersect_key($_POST, $answers) === $answers, 'Confirmed Stop Action lost');
+        check(isset(SurveyFramework::$logs[$freshKey]) !== $discard, 'Discarded response waited for a save hook');
+        if (!$discard) $module->redcap_save_record(355, 'stop-record', 'form_1', 1, null, 'public-hash', 20, 1);
+        check(!isset($_SESSION[$pendingKey][$freshKey]), 'Finished Stop Action retained held answers');
+    }
+}
+Project::$discardOnStop = false;
+Project::$stopActions = ['normal' => 'stop'];
+Project::$fieldTypes = ['normal' => 'radio', 'file' => 'file'];
+$_SESSION = SurveyFramework::$logs = [];
+Crypto::$nextGuids = [$freshGuid];
+surveyRequest(['submit-action' => 'submit-action', 'normal' => 'continue'] + $recoverablePost, ['__stopaction' => 1, '__endsurvey' => 1]);
+check(empty($_SESSION[$pendingKey]), 'Unmatched choice registered a Stop Action');
+foreach (['stop', 'continue'] as $replacementChoice) {
+    $_SESSION = SurveyFramework::$logs = [];
+    Crypto::$nextGuids = [$freshGuid];
+    surveyRequest(['normal' => 'stop', 'file' => '1234'] + $recoverablePost, ['__endsurvey' => 1, '__stopaction' => 1], null, ['file' => '']);
+    surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'answer'], [], null, ['file' => '']);
+    check(isset($_POST['__prefill']) && !isset($_GET['__stopaction']), 'Re-upload prefill prematurely ended survey');
+    surveyRequest([Module::CLIENT_KEY => $freshGuid, 'normal' => $replacementChoice, 'file' => '5678'] + $recoverablePost, [], null, ['file' => '']);
+    check(isset($_GET['__endsurvey'], $_GET['__stopaction']) === ($replacementChoice === 'stop') && $_POST['file'] === '5678', 'Re-upload did not respect the final selected choice');
+}
+Project::$stopActions = Project::$fieldTypes = [];
 
 // Recovery also works for generated math and for a native validation redisplay
 // that has not yet called the save hook. Re-verify before the first resumed POST.
