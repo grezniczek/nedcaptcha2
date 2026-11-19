@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+from uuid import uuid4
 
 import yaml
 
@@ -47,14 +48,18 @@ elif re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
     for readme in [Path("README.md"), *Path(".").glob("README.*.md")]:
         require(badge in readme.read_text(encoding="utf-8"), f"Check the DOI badge in {readme}.")
 
-    row = re.compile(r"^\|\s*v?" + re.escape(tag[1:]) + r"\s*\|(.+)\|\s*$", re.MULTILINE)
-    entries = row.findall(Path("CHANGELOG.md").read_text(encoding="utf-8"))
-    require(len(entries) == 1 and entries[0].strip(), f"Expected one non-empty changelog entry for {tag}.")
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    sections = re.split(r"^##[ \t]+(.+)$", changelog, flags=re.MULTILINE)
+    entries = [body for heading, body in zip(sections[1::2], sections[2::2])
+               if heading.strip() in (tag, tag[1:])]
+    require(len(entries) == 1, f"Expected exactly one changelog heading for {tag}.")
     notes = entries[0].strip()
+    require(re.search(r"^[-*+] [^\s]", notes, re.MULTILINE), f"Expected release notes in a bullet list for {tag}.")
 else:
     print(f"Metadata validated for {tag}.")
     raise SystemExit(0)
 
 name = json.loads(Path("config.json").read_text(encoding="utf-8"))["name"]
 with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-    print("publish=true", f"title={name} {tag}", f"notes={notes}", sep="\n", file=output)
+    delimiter = uuid4().hex
+    print("publish=true", f"title={name} {tag}", f"notes<<{delimiter}", notes, delimiter, sep="\n", file=output)
