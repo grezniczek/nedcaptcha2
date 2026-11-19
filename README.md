@@ -36,8 +36,7 @@ The custom challenge type can also be used as lightweight public-survey password
 
 ## Installation
 
-- Download a version from [GitHub Releases](https://github.com/grezniczek/nedcaptcha2/releases) and extract it to `<redcap-root>/modules/nedcaptcha2_v<version-number>` with `config.json` directly inside that folder. You can also install it from the REDCap Consortium External Modules Repo when available.
-- For a development checkout, retain the directory name `nedcaptcha2_v9.9.9`; this directory convention is independent of published release versions.
+- Install this external module from the [REDCap Consortium External Modules Repo](https://redcap.vumc.org/consortium/modules/index.php) or download a version from [GitHub Releases](https://github.com/grezniczek/nedcaptcha2/releases) or [Zenodo](https://doi.org/10.5281/zenodo.24365477) and extract it to `<redcap-root>/modules/nedcaptcha2_v<version-number>` with `config.json` directly inside that folder. .
 - In REDCap, go to _Control Center > Technical / Developer Tools > External Modules_ and enable **nedCAPTCHA 2**.
 - Enable the module in projects that need public survey CAPTCHA protection.
 
@@ -239,8 +238,6 @@ See the [changelog](CHANGELOG.md) for changes by version.
 If you use this external module for a project that generates a research output, please cite this software in addition to [citing REDCap](https://projectredcap.org/resources/citations/).
 
 Select **Cite this repository** on GitHub for citation formats generated from [CITATION.cff](CITATION.cff). The [Zenodo archive](https://doi.org/10.5281/zenodo.24365477) covers all versions. To cite a particular release, use the DOI on that version’s Zenodo record.
-
----
 
 ## AI assistance
 
