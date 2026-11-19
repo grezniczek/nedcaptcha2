@@ -8,8 +8,6 @@ authors:
     given-names: "Günther A."
     orcid: "https://orcid.org/0000-0002-0852-6002"
     affiliation: "St. Elisabethgruppe GmbH - Marien Hospital Herne, Klinikum der Ruhr-Universität Bochum"
-version: "1.1.4"
-date-released: "2026-11-17"
 license: "MIT"
 doi: "10.5281/zenodo.20492803"
 url: "https://github.com/grezniczek/nedcaptcha2"
@@ -21,18 +19,3 @@ keywords:
   - "survey"
   - "privacy"
   - "no external dependencies"
-identifiers:
-  - type: doi
-    value: "10.5281/zenodo.20492803"
-    description: "Software archive (all versions)"
-preferred-citation:
-  type: software
-  title: "nedCAPTCHA 2 (REDCap External Module)"
-  authors:
-    - family-names: "Rezniczek"
-      given-names: "Günther A."
-      orcid: "https://orcid.org/0000-0002-0852-6002"
-  version: "1.1.4"
-  date-released: "2026-11-17"
-  doi: "10.5281/zenodo.20492803"
-  url: "https://github.com/grezniczek/nedcaptcha2"

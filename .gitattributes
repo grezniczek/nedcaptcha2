@@ -1,6 +1,9 @@
+/.github export-ignore
 /.vscode export-ignore
 /.gitignore export-ignore
 /.gitattributes export-ignore
-EM.code-workspace export-ignore
-package-lock.json export-ignore
-package.json export-ignore
+/.zenodo.json export-ignore
+/tests export-ignore
+/EM.code-workspace export-ignore
+/package-lock.json export-ignore
+/package.json export-ignore

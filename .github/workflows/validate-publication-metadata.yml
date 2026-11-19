@@ -1,0 +1,53 @@
+name: Validate and publish release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.metadata.outputs.publish }}
+      title: ${{ steps.metadata.outputs.title }}
+      notes: ${{ steps.metadata.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install metadata validators
+        run: python -m pip install "cffconvert==2.0.0" "PyYAML>=6,<7"
+      - name: Validate citation format and release metadata
+        id: metadata
+        run: |
+          cffconvert --validate -i CITATION.cff
+          python .github/validate_release.py
+
+  release:
+    needs: validate
+    if: needs.validate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the tagged source on GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ needs.validate.outputs.title }}
+          NOTES: ${{ needs.validate.outputs.notes }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists for $GITHUB_REF_NAME."
+            exit 0
+          fi
+          options=()
+          if [[ "$GITHUB_REF_NAME" == vPrep ]]; then options+=(--latest=false); fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --title "$TITLE" --notes "$NOTES" "${options[@]}"
