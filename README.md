@@ -1,6 +1,6 @@
 # nedCAPTCHA 2 (REDCap External Module)
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20492803.svg)](https://doi.org/10.5281/zenodo.20492803)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24365477.svg)](https://doi.org/10.5281/zenodo.24365477)
 
 nedCAPTCHA 2 adds CAPTCHA protection to REDCap public surveys without depending on an external CAPTCHA provider. The name stands for **n**o **e**xternal **d**ependencies.
 
@@ -238,4 +238,4 @@ See the [changelog](CHANGELOG.md) for changes by version.
 
 If you use this external module for a project that generates a research output, please cite this software in addition to [citing REDCap](https://projectredcap.org/resources/citations/).
 
-Select **Cite this repository** on GitHub for citation formats generated from [CITATION.cff](CITATION.cff). The [Zenodo archive](https://doi.org/10.5281/zenodo.20492803) covers all versions. To cite a particular release, use the DOI on that version’s Zenodo record.
+Select **Cite this repository** on GitHub for citation formats generated from [CITATION.cff](CITATION.cff). The [Zenodo archive](https://doi.org/10.5281/zenodo.24365477) covers all versions. To cite a particular release, use the DOI on that version’s Zenodo record.
