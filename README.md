@@ -162,7 +162,7 @@ This tag may be used on multiple fields.
 ### Common Options
 
 - **CAPTCHA Type:** `math`, `image`, `custom`, or `none`.
-- **Capture response:** When enabled, the verified CAPTCHA response is stored in the `@NEDCAPTCHA` field when the first survey submission is saved, including Save & Return Later. The response is kept server-side until saving. By default, responses are not captured.
+- **Capture response:** Enable this option to save the verified answer in the `@NEDCAPTCHA` field with the first survey submission, including Save & Return Later. The module holds the answer server-side until REDCap saves the survey. A capture failure leaves the survey submission intact. The November 19 browser check below documents one such failure during Stop Action recovery. Capture is off by default.
 
 ### Math Problem
 
@@ -237,7 +237,7 @@ For example:
 
 ### Checks added after the November 17 browser run
 
-The automated suite also covers public survey links in multiple arms, Stop Action recovery with save and discard settings, malformed color and custom-pair configuration, editing structured pairs, repairing truncated annotations, and adding the first editor link without reloading. These cases are separate from the browser results below.
+The automated suite also covers public survey links in multiple arms, Stop Action recovery with save and discard settings, malformed color and custom-pair configuration, editing structured pairs, repairing truncated annotations, and adding the first editor link without reloading.
 
 ### 1.1.4 Release Readiness
 
@@ -254,6 +254,18 @@ The issues identified in the code review on 2026-11-16 have been corrected and c
 | Editor permission and draft errors | Visible errors and Cancel-only dialogs passed with the native jQuery UI widget and simulated server replies; the PHP permission/draft guards are covered by the automated suite. |
 
 Browser testing found and corrected silent attachment loss after survey-session loss. Regression tests cover retaining owned upload contexts, returning a filled form for unowned contexts, and saving a replacement upload. Project annotations and pagination were restored after testing; synthetic responses and attachments remain in project 562 for inspection. These results cover this local installation and Chromium; other REDCap installations and browsers were not exercised.
+
+#### November 19 live checks — main REDCap 17.6.0, PID 355, headless Chrome 157
+
+Each recovery check opened a public survey link in a fresh browser profile with response capture enabled. After solving the first CAPTCHA, the browser cleared its survey cookies, selected **No** for `yn`, and confirmed the Stop Action. The recovery page retained the submission. An incorrect CAPTCHA answer left the project record, data-row, and survey-response counts unchanged in both runs.
+
+| Check | Browser result | Verified in REDCap |
+| --- | --- | --- |
+| Second arm’s public link | The CAPTCHA appeared before the survey questions. A correct answer opened the survey. | The public link belonged to the first event of the temporary second arm. |
+| Discard after recovery, arm 2 | After a correct recovery answer, the browser displayed a fresh CAPTCHA instead of the completion acknowledgement. The same happened with the survey session intact. | REDCap logged that the Stop Action discarded the response. Neither run added a record, field value, or survey response. |
+| Save after recovery, arm 1 | After a correct recovery answer, the browser displayed the thank-you page. | Synthetic record 14 contained `record_id = 14`, `yn = 0`, and `form_1_complete = 2`. The public survey response had a completion timestamp. The `nc2_resp` field had no stored value. The module logged `CAPTCHA response capture failed` for that field and record. |
+
+The original single-arm setup, math CAPTCHA annotation, and Stop Action settings were restored. Record 14 remains in PID 355 for inspection.
 
 ### Development Checks
 
