@@ -439,7 +439,17 @@ foreach ([false, true] as $discard) {
         $module = surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'answer']);
         check(isset($_GET['__stopaction'], $_GET['__endsurvey']) && array_intersect_key($_POST, $answers) === $answers, 'Confirmed Stop Action lost');
         check(isset(SurveyFramework::$logs[$freshKey]) !== $discard, 'Discarded response waited for a save hook');
-        if (!$discard) $module->redcap_save_record(355, 'stop-record', 'form_1', 1, null, 'public-hash', 20, 1);
+        if ($discard) {
+            check(!isset($_POST['captcha']), 'Discard included a captured answer');
+        } else {
+            // e-Consent can seal the response immediately. REDCap must receive the
+            // verified field with the stop choice, on the same ordinary survey page.
+            check($_POST['captcha'] === 'answer' && in_array('captcha', pages()[1], true), 'Native Stop Action save lost capture');
+            check(pages()[2] === ['second'], 'Capture moved an ordinary field to a different page');
+            $saves = REDCap::$saves;
+            $module->redcap_save_record(355, 'stop-record', 'form_1', 1, null, 'public-hash', 20, 1);
+            check(REDCap::$saves === $saves, 'Stop Action attempted a second write after completion');
+        }
         check(!isset($_SESSION[$pendingKey][$freshKey]), 'Finished Stop Action retained held answers');
     }
 }

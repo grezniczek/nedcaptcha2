@@ -147,12 +147,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 			// We are outside any context where the CAPTCHA should be shown
 			// Remove the fields
-			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
-			foreach ($this->nedcaptcha_fields as $field) {
-				unset($Proj->metadata[$field]);
-				unset($Proj->forms[$instrument]['fields'][$field]);
-			}
-			// We are done
+			$this->prepareSurveyFields($Proj, $instrument, $tagged);
 			return;
 		}
 
@@ -165,11 +160,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		}
 		if ($params["type"] == "none") {
 			$this->scripts_top[] = "console.log('nedCAPTCHA 2: No CAPTCHA required.');";
-			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
-			foreach ($this->nedcaptcha_fields as $field) {
-				unset($Proj->metadata[$field]);
-				unset($Proj->forms[$instrument]['fields'][$field]);
-			}
+			$this->prepareSurveyFields($Proj, $instrument, $tagged);
 			return;
 		}
 		$this->active = true;
@@ -236,11 +227,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			$this->createSolvedSession($project_id, $sh);
 			$resumed = $this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged, $client_key);
 			if ($resumed) $this->acceptSubmission($store_key, $stored, $Proj, $tagged);
-			$this->nedcaptcha_fields = array_unique(array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])));
-			foreach ($this->nedcaptcha_fields as $field) {
-				unset($Proj->metadata[$field]);
-				unset($Proj->forms[$instrument]['fields'][$field]);
-			}
+			$this->prepareSurveyFields($Proj, $instrument, $tagged);
 			if ($resumed) {
 				// Resume REDCap's native submission or file re-upload prefill path
 				// before any survey HTML is built.
@@ -660,6 +647,31 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 	#endregion
 
 	#region Private Methods
+
+	private function prepareSurveyFields($project, $instrument, $tagged) {
+		$fields = &$project->forms[$instrument]['fields'];
+		foreach (array_merge($this->nedcaptcha_fields, array_keys($tagged[self::AT_CUSTOMEMBED] ?? [])) as $field) {
+			unset($project->metadata[$field], $fields[$field]);
+		}
+		if ($this->pending_capture === null || !isset($_GET['__stopaction'], $_GET['__endsurvey'])) return;
+
+		// A Stop Action can complete and seal an e-Consent response before the
+		// save hook. Include the verified answer in REDCap's original write.
+		list($original, $capture, $response) = $this->pending_capture;
+		list($pages) = \Survey::getPageFields($instrument, $project->surveys[$project->forms[$instrument]['survey_id']]['question_by_section']);
+		$page = $pages[1] ?? [];
+		if (!$page) return;
+		// Keep the visible sections intact even when the CAPTCHA had its own section.
+		$offset = array_search(end($page), array_keys($fields), true) + 1;
+		$fields = array_slice($fields, 0, $offset, true)
+			+ [$capture => $original->forms[$instrument]['fields'][$capture]]
+			+ array_slice($fields, $offset, null, true);
+		$project->metadata[$capture] = $original->metadata[$capture];
+		$project->metadata[$capture]['element_preceding_header'] = '';
+		$project->metadata[$capture]['misc'] .= ' @HIDDEN-SURVEY';
+		$_POST[$capture] = htmlspecialchars($response, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+		$this->pending_capture = null;
+	}
 
 	private function clearSurveyRoutingFlags() {
 		foreach (['__add_participant', '__participant_identifier', '__return', '__endpublicsurvey', '__rh', '__endsurvey', '__stopaction', '__page__', '__prevpage', '__reqmsg', '__passthru', 'id'] as $flag) {
