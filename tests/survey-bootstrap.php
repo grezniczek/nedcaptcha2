@@ -100,6 +100,7 @@ namespace {
                 }
                 return ['', [], ($_GET['__page__'] ?? 1) === $count];
             }
+            public static function encryptResponseHash($response, $participantId) { return "signed-$participantId-$response"; }
             public static function decryptResponseHash($hash, $participantId) { return $hash === 'valid-response' && $participantId === 10 ? 20 : ''; }
             public static function getPageNumHash($page) { return hash('sha256', 'test-page-' . $page); }
             public static function verifyPageNumHash($hash, $page) { return $hash === self::getPageNumHash($page); }
@@ -130,6 +131,7 @@ namespace {
         ActionTagHelper::$cache = [];
         $_POST = $post;
         $_GET = $get + ['s' => 'public-hash'];
+        $_SERVER['REQUEST_URI'] = '/surveys/?' . http_build_query($_GET);
         $_SERVER['REQUEST_METHOD'] = $post ? 'POST' : 'GET';
         $GLOBALS['participant_id'] = 10;
         unset(Project::$project_cache[355]);

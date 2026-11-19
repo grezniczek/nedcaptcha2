@@ -107,14 +107,21 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		);
 		// Existing responses carry a REDCap-authenticated response hash, not just a page number.
 		$response_hash = $_POST['__response_hash__'] ?? null;
-		if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['__endpublicsurvey'])) {
+		$acknowledgement = $_SERVER['REQUEST_METHOD'] === 'GET' && !$_POST && isset($_GET['__endpublicsurvey']);
+		if ($acknowledgement) {
 			$response_hash = $_GET['__rh'] ?? null;
 		}
-		$existing_response = false;
+		$verified_continuation = false;
 		if ($is_public && is_string($response_hash) && $response_hash !== '') {
 			$participant_id = \Survey::getParticipantIdFromHash($sh);
 			$response_id = $participant_id ? \Survey::decryptResponseHash($response_hash, $participant_id) : null;
-			$existing_response = is_numeric($response_id) && $response_id > 0;
+			$verified_continuation = is_numeric($response_id) && $response_id > 0;
+			// REDCap signs an empty response ID when a fresh Stop Action discards.
+			// That signature belongs only on the terminal GET for this participant.
+			if (!$verified_continuation && $acknowledgement && $participant_id
+				&& isset($_GET['__stopaction'], $_GET['__endsurvey']) && $this->discardsStoppedResponse($Proj)) {
+				$verified_continuation = hash_equals(\Survey::encryptResponseHash('', $participant_id), $response_hash);
+			}
 		}
 		// Only the dedicated Save & Return flow may defer code validation to REDCap.
 		$save_and_return = !empty($Proj->surveys[$context['survey_id']]['save_and_return']);
@@ -140,8 +147,8 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		], function($v) { return !empty($v); });
 		$session_passed = $is_public && isset($tagged[self::AT_SETUP]) && $this->validateSolvedSession($project_id, $sh);
 
-		if ($returning || $existing_response || $stored["passed"] || $session_passed || !$is_public || !isset($tagged[self::AT_SETUP])) {
-			if ($owned && $stored['passed'] && $is_public && !$returning && !$existing_response && isset($tagged[self::AT_SETUP])) {
+		if ($returning || $verified_continuation || $stored["passed"] || $session_passed || !$is_public || !isset($tagged[self::AT_SETUP])) {
+			if ($owned && $stored['passed'] && $is_public && !$returning && !$verified_continuation && isset($tagged[self::AT_SETUP])) {
 				$this->restorePendingSubmission($store_key, $Proj, $instrument, $tagged, $client_key);
 				$this->acceptSubmission($store_key, $stored, $Proj, $tagged);
 			}
@@ -755,7 +762,7 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 		if (!empty($submission['reupload_stop'])) {
 			if ($this->isRecoverableSubmission($_POST, false, false)) {
 				$answers = $this->filterPendingSubmission($_POST, $project, $instrument, $tagged);
-				if ($this->hasSelectedStopChoice($answers, $project)) $_GET['__stopaction'] = $_GET['__endsurvey'] = 1;
+				if ($this->hasSelectedStopChoice($answers, $project)) $this->restoreStopAction();
 			}
 			return false;
 		}
@@ -775,9 +782,16 @@ class NEDCaptcha2ExternalModule extends AbstractExternalModule {
 			}
 			return true;
 		}
-		if ($stop) $_GET['__stopaction'] = $_GET['__endsurvey'] = 1;
+		if ($stop) $this->restoreStopAction();
 		if ($_POST['submit-action'] === 'submit-btn-savereturnlater') $_GET['__return'] = 1;
 		return true;
+	}
+
+	private function restoreStopAction() {
+		$_GET['__stopaction'] = $_GET['__endsurvey'] = 1;
+		// The public completion redirect carries the query from REQUEST_URI.
+		// A recovery CAPTCHA posts to the plain survey URL.
+		$_SERVER['REQUEST_URI'] .= '&__stopaction=1&__endsurvey=1';
 	}
 
 	private function prefillForFileReupload($post, $project, $client_key) {

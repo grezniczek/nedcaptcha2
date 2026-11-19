@@ -6,7 +6,10 @@ function db_escape($value) { return addslashes($value); }
 function db_query($sql) {
     if (stripos($sql, 'SELECT s.project_id') !== false) return surveyContext($_GET['s']);
     if (stripos($sql, 'select participant_id') !== false) return ['participant_id' => 10];
-    if (stripos($sql, 'select response_id') !== false) return ['response_id' => 20];
+    if (stripos($sql, 'select response_id') !== false) {
+        $digest = hash('sha512', $GLOBALS['__SALT__'] . '20');
+        return strpos($sql, $digest) !== false ? ['response_id' => 20] : [];
+    }
     if (stripos($sql, 'select m.field_name') !== false) return ['field_name' => $GLOBALS['lastSavedField']];
     throw new RuntimeException('Unexpected test query');
 }
@@ -438,6 +441,8 @@ foreach ([false, true] as $discard) {
         check($_POST === [], 'Wrong answer resumed Stop Action');
         $module = surveyRequest([Module::CLIENT_KEY => $freshGuid, 'captcha' => 'answer']);
         check(isset($_GET['__stopaction'], $_GET['__endsurvey']) && array_intersect_key($_POST, $answers) === $answers, 'Confirmed Stop Action lost');
+        parse_str(parse_url($_SERVER['REQUEST_URI'], PHP_URL_QUERY), $redirectQuery);
+        check(isset($redirectQuery['__stopaction'], $redirectQuery['__endsurvey']), 'Public completion redirect lost the Stop Action');
         check(isset(SurveyFramework::$logs[$freshKey]) !== $discard, 'Discarded response waited for a save hook');
         if ($discard) {
             check(!isset($_POST['captcha']), 'Discard included a captured answer');
@@ -453,6 +458,19 @@ foreach ([false, true] as $discard) {
         check(!isset($_SESSION[$pendingKey][$freshKey]), 'Finished Stop Action retained held answers');
     }
 }
+// The post/redirect/get boundary drops the survey session and a discarded
+// response has no row to look up. Use REDCap's participant-bound empty-ID hash.
+$_SESSION = SurveyFramework::$logs = [];
+$terminal = $redirectQuery + ['__endpublicsurvey' => 1, '__rh' => Survey::encryptResponseHash('', 10)];
+check(!property(surveyRequest([], $terminal), 'active') && isset($_GET['__stopaction']), 'Discard acknowledgement was challenged');
+foreach (['__endpublicsurvey', '__endsurvey', '__stopaction', '__rh'] as $required) {
+    $incomplete = $terminal;
+    unset($incomplete[$required]);
+    check(property(surveyRequest([], $incomplete), 'active'), 'Incomplete discard redirect was accepted');
+}
+check(property(surveyRequest([], ['__rh' => Survey::encryptResponseHash('', 11)] + $terminal), 'active'), 'Acknowledgement accepted another participant’s hash');
+check(property(surveyRequest(['submit-action' => 'submit-btn-saverecord', '__response_hash__' => $terminal['__rh']], $terminal), 'active')
+    && $_POST === [], 'Discard acknowledgement authorized a survey submission');
 Project::$discardOnStop = false;
 Project::$stopActions = ['normal' => 'stop'];
 Project::$fieldTypes = ['normal' => 'radio', 'file' => 'file'];
