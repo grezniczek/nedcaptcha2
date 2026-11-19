@@ -36,11 +36,9 @@ The custom challenge type can also be used as lightweight public-survey password
 
 ## Installation
 
-- Install this external module from the [REDCap Consortium External Modules Repo](https://redcap.vumc.org/consortium/modules/index.php) or download a version from [GitHub Releases](https://github.com/grezniczek/nedcaptcha2/releases) or [Zenodo](https://doi.org/10.5281/zenodo.24365477) and extract it to `<redcap-root>/modules/nedcaptcha2_v<version-number>` with `config.json` directly inside that folder. .
+- Install this external module from the [REDCap Consortium External Modules Repo](https://redcap.vumc.org/consortium/modules/index.php) or download a version from [GitHub Releases](https://github.com/grezniczek/nedcaptcha2/releases) or [Zenodo](https://doi.org/10.5281/zenodo.24365477) and extract it to `<redcap-root>/modules/nedcaptcha2_v<version-number>` with `config.json` directly inside that folder.
 - In REDCap, go to _Control Center > Technical / Developer Tools > External Modules_ and enable **nedCAPTCHA 2**.
 - Enable the module in projects that need public survey CAPTCHA protection.
-
-An importable REDCap demo project is available at [example/Demo_nedCAPTCHA2.REDCap.xml](example/Demo_nedCAPTCHA2.REDCap.xml).
 
 ## Configuration
 
@@ -214,6 +212,12 @@ For example:
   font-size: 1.2rem;
 }
 ```
+
+## Demo Project
+
+Create a REDCap project from the [demo project XML](example/Demo_nedCAPTCHA2.REDCap.xml), enable **nedCAPTCHA 2** in the project, and open the public survey link to try the default math CAPTCHA.
+
+The demo project also includes custom challenge-response pairs. To try them, click `@NEDCAPTCHA` on the `reg_field` field in the Online Designer, select **Custom Challenge/Response**, and click **Update**. Open the public survey link again to see a randomly selected challenge from the demo.
 
 ## Notes and Limitations
 
