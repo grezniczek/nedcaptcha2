@@ -239,3 +239,9 @@ See the [changelog](CHANGELOG.md) for changes by version.
 If you use this external module for a project that generates a research output, please cite this software in addition to [citing REDCap](https://projectredcap.org/resources/citations/).
 
 Select **Cite this repository** on GitHub for citation formats generated from [CITATION.cff](CITATION.cff). The [Zenodo archive](https://doi.org/10.5281/zenodo.24365477) covers all versions. To cite a particular release, use the DOI on that version’s Zenodo record.
+
+---
+
+## AI assistance
+
+The project maintainer makes extensive use of AI tools, primarily OpenAI’s ChatGPT, for design, implementation, refactoring, debugging, testing, code review, and documentation. The maintainer reviews and adapts these contributions and takes responsibility for the software and its releases.
